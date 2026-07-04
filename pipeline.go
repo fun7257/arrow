@@ -25,25 +25,24 @@ func (p *pipeline) clone() *pipeline {
 	}
 }
 
-// dispatch runs the route handler (unless aborted) then registered After callbacks.
-func dispatch(ctx *Context, handler HandlerFunc) {
-	if !ctx.aborted {
-		handler(ctx)
-	}
+// runNoMiddleware is the shared zero-middleware entry. Router registration
+// inlines an equivalent closure for performance; keep both in sync.
+func runNoMiddleware(ctx *Context, handler HandlerFunc) {
+	defer recoverAndRelease(ctx)
+	handler(ctx)
 	for _, after := range ctx.afters {
 		after(ctx)
 	}
 }
 
-// serveRequest is the zero-middleware hot path: panic recovery, handler, After FIFO.
-func serveRequest(ctx *Context, handler HandlerFunc) {
-	defer recoverAndRelease(ctx)
-	dispatch(ctx, handler)
-}
-
 // Run executes the linear penetration pipeline:
 // Pre (forward) -> Handler -> After (forward, FIFO).
 func (p *pipeline) Run(ctx *Context, handler HandlerFunc) {
+	if len(p.middlewares) == 0 {
+		runNoMiddleware(ctx, handler)
+		return
+	}
+
 	defer recoverAndRelease(ctx)
 
 	for _, mw := range p.middlewares {
@@ -53,7 +52,13 @@ func (p *pipeline) Run(ctx *Context, handler HandlerFunc) {
 		}
 	}
 
-	dispatch(ctx, handler)
+	if !ctx.aborted {
+		handler(ctx)
+	}
+
+	for _, after := range ctx.afters {
+		after(ctx)
+	}
 }
 
 func recoverAndRelease(ctx *Context) {

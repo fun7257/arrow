@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	"github.com/fun7257/arrow"
 )
 
 // BenchRoute is a single route entry in the benchmark corpus.
@@ -109,18 +111,47 @@ func TestBenchProbeRequestsAlignWithCorpus(t *testing.T) {
 
 func TestBenchHotPathUsesHandler(t *testing.T) {
 	s := loadBenchScenario(t, "minimal.json")
-	h := buildArrowApp(s)
-	if h == nil {
-		t.Fatal("buildArrowApp returned nil handler")
-	}
+	wantBody := s.Routes[0].Response
 	req := benchRequest(probeRequest(s))
+
+	h := buildArrowApp(s)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
-		t.Fatalf("status = %d, want 200", rec.Code)
+		t.Fatalf("bench handler status = %d, want 200", rec.Code)
 	}
-	if rec.Body.Len() == 0 {
-		t.Fatal("expected non-empty body from minimal scenario")
+	if got := rec.Body.String(); got != wantBody {
+		t.Fatalf("bench handler body = %q, want %q", got, wantBody)
+	}
+
+	// buildArrowApp must not register global middleware; a Use'd app must differ.
+	mwRan := false
+	appWithMW := arrow.New()
+	appWithMW.Use(func(c *arrow.Context) { mwRan = true })
+	registerArrowRoutes(appWithMW, s.Routes)
+	recMW := httptest.NewRecorder()
+	appWithMW.Handler().ServeHTTP(recMW, req)
+	if !mwRan {
+		t.Fatal("middleware must run when app.Use is called")
+	}
+	if recMW.Body.String() != wantBody {
+		t.Fatalf("middleware app body = %q, want %q", recMW.Body.String(), wantBody)
+	}
+
+	// Zero-middleware pipeline.Run must still run After callbacks (same path as bench).
+	var afterRan bool
+	appAfter := arrow.New()
+	appAfter.GET(s.Routes[0].Pattern, func(c *arrow.Context) {
+		c.After(func(c *arrow.Context) { afterRan = true })
+		c.Write([]byte(wantBody))
+	})
+	recAfter := httptest.NewRecorder()
+	appAfter.Handler().ServeHTTP(recAfter, req)
+	if !afterRan {
+		t.Fatal("zero-middleware pipeline.Run must execute After callbacks")
+	}
+	if recAfter.Body.String() != wantBody {
+		t.Fatalf("after app body = %q, want %q", recAfter.Body.String(), wantBody)
 	}
 }
 

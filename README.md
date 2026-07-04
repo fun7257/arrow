@@ -406,8 +406,8 @@ arrow/
 go test -bench=. -benchmem -count=1 -run='^$' ./...
 ```
 
-计时路径经 `Router` → `Handler()` → `ServeHTTP`；无全局中间件的场景走
-`serveRequest` 热路径。详见 `testdata/bench/README.md`。
+计时路径经 `Router` → `Handler()` → `ServeHTTP` → `pipeline.Run`。详见
+`testdata/bench/README.md`。
 
 ---
 
