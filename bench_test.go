@@ -9,7 +9,7 @@
 //
 // Run: go test -bench=. -benchmem -count=1 -run='^$' ./...
 // Corpus/probe alignment: TestBenchCorpusLoads, TestBenchProbeRequestsAlignWithCorpus.
-// Hot path: TestBenchHotPathUsesRouterZeroMiddlewareDispatch, TestZeroMiddleware* (router_hotpath_test.go).
+// Hot path: TestBenchHotPathUsesRouterZeroMiddlewareDispatch (router_dispatch_test.go).
 package arrow_test
 
 import (

@@ -47,17 +47,18 @@ func TestBenchHotPathUsesRouterZeroMiddlewareDispatch(t *testing.T) {
 		t.Fatalf("static pipeline dispatches = %d, want 0", arrow.ZeroMiddlewarePipelineDispatches())
 	}
 
-	var afterRan bool
+	var order []string
 	app := arrow.New()
 	app.GET(s.Routes[0].Pattern, func(c *arrow.Context) {
-		c.After(func(c *arrow.Context) { afterRan = true })
+		c.After(func(c *arrow.Context) { order = append(order, "after") })
+		order = append(order, "handler")
 		c.Write([]byte(wantBody))
 	})
 	arrow.ResetZeroMiddlewareDispatchCounters()
 	recAfter := httptest.NewRecorder()
 	app.Handler().ServeHTTP(recAfter, req)
-	if !afterRan {
-		t.Fatal("zero-middleware path must run After callbacks")
+	if len(order) != 2 || order[0] != "handler" || order[1] != "after" {
+		t.Fatalf("after order = %v, want [handler after]", order)
 	}
 	if arrow.ZeroMiddlewareRouterDispatches() != 1 {
 		t.Fatalf("after router dispatches = %d, want 1", arrow.ZeroMiddlewareRouterDispatches())

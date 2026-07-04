@@ -397,17 +397,23 @@ arrow/
 
 ---
 
-## 性能基准
+## 性能测试
 
-五类场景（minimal / static / parametric / middleware / large）与 `net/http.ServeMux`
-成对对比，夹具见 `testdata/bench/`：
+两套互补测试，详见 `testdata/bench/README.md`：
+
+**微基准**（Arrow vs `net/http.ServeMux`，五类场景）：
 
 ```bash
 go test -bench=. -benchmem -count=1 -run='^$' ./...
 ```
 
-计时路径经 `Router` → `Handler()` → `ServeHTTP`；无全局中间件时走路由注册内联闭包。
-详见 `testdata/bench/README.md`。
+**中等压力**（`examples/server`，默认 30s × 3 端点，并发 100/50）：
+
+```bash
+./scripts/stress_test.sh
+# 或一次跑完微基准 + 压力：
+./scripts/run_perf.sh
+```
 
 ---
 
