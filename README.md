@@ -8,6 +8,8 @@ go get github.com/fun7257/arrow
 
 **要求：** Go 1.22+（依赖 `http.ServeMux` 路由增强）
 
+**AI Agent 使用手册：** [`AGENT.md`](AGENT.md)（穿透语义、API 速查、决策树、DO/DON'T）
+
 ---
 
 ## 核心理念：穿透线性模型
