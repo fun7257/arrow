@@ -22,6 +22,7 @@ import (
 
 	"github.com/fun7257/arrow"
 	"github.com/fun7257/arrow/middleware"
+	"github.com/fun7257/arrow/target"
 )
 
 func main() {
@@ -54,23 +55,19 @@ func listenAddr() string {
 	return ":8080"
 }
 
-var homeBody = []byte("Arrow HTTP example\n")
-
 func home(c *arrow.Context) {
-	c.Writer.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	c.Write(homeBody)
+	target.WritePlain(c, http.StatusOK, "Arrow HTTP example\n")
 }
 
 func health(c *arrow.Context) {
-	writeJSON(c, http.StatusOK, map[string]string{"status": "ok"})
+	target.OK(c, map[string]string{"status": "ok"})
 }
 
 func requireToken(token string) arrow.HandlerFunc {
 	return func(c *arrow.Context) {
 		auth := c.Request.Header.Get("Authorization")
 		if auth != "Bearer "+token {
-			writeJSON(c, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
-			c.Abort(http.StatusUnauthorized)
+			_ = target.AbortUnauthorized(c, "unauthorized")
 		}
 	}
 }
@@ -92,7 +89,7 @@ var (
 func listPosts(c *arrow.Context) {
 	postsMu.RLock()
 	defer postsMu.RUnlock()
-	writeJSON(c, http.StatusOK, posts)
+	target.OK(c, posts)
 }
 
 func showPost(c *arrow.Context) {
@@ -102,11 +99,12 @@ func showPost(c *arrow.Context) {
 	defer postsMu.RUnlock()
 	for _, p := range posts {
 		if p.ID == id {
-			writeJSON(c, http.StatusOK, p)
+			target.OK(c, p)
 			return
 		}
 	}
-	writeJSON(c, http.StatusNotFound, map[string]string{"error": "post not found"})
+	// Handler path: write 404 without aborting (penetration already complete).
+	target.NotFound(c, "post not found")
 }
 
 func createPost(c *arrow.Context) {
@@ -114,11 +112,11 @@ func createPost(c *arrow.Context) {
 		Title string `json:"title"`
 	}
 	if err := json.NewDecoder(c.Request.Body).Decode(&in); err != nil {
-		writeJSON(c, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		target.BadRequest(c, "invalid json")
 		return
 	}
 	if in.Title == "" {
-		writeJSON(c, http.StatusBadRequest, map[string]string{"error": "title is required"})
+		target.BadRequest(c, "title is required")
 		return
 	}
 
@@ -127,14 +125,5 @@ func createPost(c *arrow.Context) {
 	p := post{ID: strconv.Itoa(nextPostID), Title: in.Title}
 	nextPostID++
 	posts = append(posts, p)
-	writeJSON(c, http.StatusCreated, p)
+	target.Created(c, p)
 }
-
-func writeJSON(c *arrow.Context, code int, v any) {
-	c.Writer.Header().Set("Content-Type", "application/json; charset=utf-8")
-	c.WriteHeader(code)
-	if err := json.NewEncoder(c.Writer).Encode(v); err != nil {
-		log.Printf("encode json: %v", err)
-	}
-}
-

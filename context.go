@@ -102,6 +102,11 @@ func (c *Context) IsAborted() bool {
 	return c.aborted
 }
 
+// Written reports whether the response status or body has been written.
+func (c *Context) Written() bool {
+	return c.written || c.sw.written
+}
+
 // Status returns the response status code.
 func (c *Context) Status() int {
 	if c.aborted {

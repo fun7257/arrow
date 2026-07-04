@@ -271,6 +271,67 @@ http.ListenAndServe(":8080", app.Handler())
 
 ---
 
+## 响应辅助（target）
+
+子包 `github.com/fun7257/arrow/target` 提供泛型优先的 HTTP 响应辅助，采用显式函数风格（无链式 Builder）。
+
+### 核心 API
+
+```go
+import "github.com/fun7257/arrow/target"
+
+// 写入 JSON 并继续穿透
+target.OK(c, posts)
+target.Created(c, post)
+target.NotFound(c, "post not found")
+
+// 写入后终止穿透（After 回调仍会执行）
+target.AbortUnauthorized(c, "unauthorized")
+target.AbortWith(c, target.JSON(http.StatusForbidden, target.Error{Message: "denied"}))
+```
+
+`Target` 接口统一响应写入；`Write` 仅写响应，`Abort` / `AbortWith` 写响应后调用 `c.Abort(status)`。
+
+### 泛型编码
+
+```go
+target.WriteJSON(c, http.StatusOK, body)
+target.WriteJSONAs(c, http.StatusOK, user, func(u User) target.Envelope[User] {
+    return target.Envelope[User]{Code: 0, Message: "ok", Data: u}
+})
+target.OKAs(c, user, func(u User) target.Envelope[User] {
+    return target.Envelope[User]{Code: 0, Message: "ok", Data: u}
+})
+target.WriteEncoded(c, target.Encoded[Post]{
+    Status: http.StatusOK, Encoder: target.JSONEncoder[Post]{}, Body: post,
+})
+target.WriteXML(c, http.StatusOK, payload)
+target.WriteNegotiated(c, http.StatusOK, payload) // 按 Accept 选择 JSON/XML
+```
+
+内置 `Encoder[T]`：`JSONEncoder`、`XMLEncoder`、`PlainEncoder`；`Encoded[T]` 支持自定义 headers 与 cookies。
+
+### 常用模型
+
+| 类型 | 说明 |
+|------|------|
+| `target.Error` | `{"error":"message"}` |
+| `target.Problem` | RFC 7807 Problem Details |
+| `target.Page[T]` | 分页列表 `{items,total,page,size}` |
+| `target.Envelope[T]` | 统一包装 `{code,message,data}` |
+
+### 其他能力
+
+- 文本 / HTML / 字节 / 模板：`WritePlain`、`WriteHTML`、`WriteBytes`、`WriteTemplate`
+- 重定向：`WriteRedirect`、`Found`、`SeeOther` 等
+- 文件：`WriteFile`、`WriteAttachment`、`WriteFileFS`
+- 流式 / SSE：`WriteStream(c, status, contentType, fn)`、`WriteStreamReader(c, status, contentType, r)`、`WriteSSE(c, fn func(*EventWriter) error)`
+- 头部：`SetHeader`、`SetHeaders`、`SetCookie`、`WriteWithHeaders`
+
+已写入的响应不会重复写入（`c.Written()` 守卫）。
+
+---
+
 ## 内置中间件
 
 子包 `github.com/fun7257/arrow/middleware`：
@@ -330,7 +391,8 @@ arrow/
 ├── middleware.go      # Use 中间件注册
 ├── adapter.go         # Adapt / Linear 适配器
 ├── writer_wrap.go     # ResponseWriter 可选接口委托
-└── middleware/        # 内置中间件（Recover、Logger、RequestID）
+├── middleware/        # 内置中间件（Recover、Logger、RequestID）
+└── target/            # HTTP 响应辅助（泛型 JSON/XML/错误/分页等）
 ```
 
 ---
