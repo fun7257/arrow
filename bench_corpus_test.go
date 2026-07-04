@@ -138,7 +138,7 @@ func TestBenchHotPathUsesHandler(t *testing.T) {
 		t.Fatalf("middleware app body = %q, want %q", recMW.Body.String(), wantBody)
 	}
 
-	// Zero-middleware bench path uses runNoMiddleware (see TestRouterZeroMiddlewareUsesRunNoMiddleware).
+	// Zero-middleware bench path dispatches via runNoMiddleware (see TestZeroMiddleware*).
 	var afterRan bool
 	appAfter := arrow.New()
 	appAfter.GET(s.Routes[0].Pattern, func(c *arrow.Context) {

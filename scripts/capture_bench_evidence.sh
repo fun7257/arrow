@@ -1,60 +1,46 @@
 #!/usr/bin/env bash
 # Capture benchmark evidence for Arrow perf goal verification.
-# Writes exactly four files to SCRATCH (all use the same -count=1 full-suite command):
-#   bench_before.log  — pre-optimization hot path on current bench suite
-#   bench_after.log   — optimized hot path (HEAD)
-#   bench_run1.log    — repeatability snapshot
-#   bench_run2.log    — repeatability snapshot
 #
-# Before/after differ only in hot-path source files (context, pool, pipeline,
-# router, writer_wrap) so the benchmark harness and testdata stay identical.
+# Writes exactly four files to SCRATCH (same command for all):
+#   go test -bench=. -benchmem -count=1 -run='^$' ./...
+#
+#   bench_before.log — baseline commit (default 95a1c24) with HEAD bench overlay
+#   bench_after.log  — optimized code at REPO_ROOT (HEAD working tree)
+#   bench_run1.log   — repeatability on HEAD
+#   bench_run2.log   — repeatability on HEAD
+#
+# The before run uses a detached worktree at BASELINE_COMMIT (full pre-opt tree)
+# with only the benchmark harness and testdata overlaid from HEAD so the measured
+# delta isolates hot-path optimizations, not bench fixture drift.
 set -euo pipefail
 
 SCRATCH="${SCRATCH:?set SCRATCH to the goal scratch directory}"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BASELINE_COMMIT="${BASELINE_COMMIT:-95a1c24}"
-HOTPATH_FILES=(context.go pool.go pipeline.go router.go writer_wrap.go)
-# Tests that reference optimized-only symbols; omitted during baseline capture.
-HOTPATH_TEST_FILES=(hotpath_internal_test.go pipeline_internal_test.go)
 BENCH_CMD=(go test -bench=. -benchmem -count=1 -run='^$' ./...)
+BENCH_OVERLAY_FILES=(bench_test.go bench_build_test.go bench_corpus_test.go router_hotpath_test.go)
 
 cd "$REPO_ROOT"
 
-STASH="${SCRATCH}/hotpath-stash"
-rm -rf "$STASH"
-mkdir -p "$STASH"
-for f in "${HOTPATH_FILES[@]}" "${HOTPATH_TEST_FILES[@]}"; do
-	[[ -f $f ]] && cp "$f" "$STASH/$f"
-done
-
-restore_hotpath() {
-	local commit=$1
-	for f in "${HOTPATH_FILES[@]}"; do
-		git show "${commit}:${f}" >"$f"
+overlay_bench_suite() {
+	local dest=$1
+	for f in "${BENCH_OVERLAY_FILES[@]}"; do
+		cp "$REPO_ROOT/$f" "$dest/$f"
 	done
+	rm -rf "$dest/testdata/bench"
+	cp -R "$REPO_ROOT/testdata/bench" "$dest/testdata/bench"
 }
 
-stash_hotpath_tests() {
-	for f in "${HOTPATH_TEST_FILES[@]}"; do
-		[[ -f $f ]] && rm -f "$f"
-	done
-}
+WT="${SCRATCH}/bench-baseline-wt"
+rm -rf "$WT"
+git worktree add -q "$WT" "$BASELINE_COMMIT"
 
-restore_hotpath_tests() {
-	for f in "${HOTPATH_TEST_FILES[@]}"; do
-		[[ -f $STASH/$f ]] && cp "$STASH/$f" "$f"
-	done
-}
+echo "==> bench_before.log (baseline ${BASELINE_COMMIT} + HEAD bench overlay)"
+overlay_bench_suite "$WT"
+( cd "$WT" && "${BENCH_CMD[@]}" 2>&1 ) | tee "${SCRATCH}/bench_before.log"
+git worktree remove -f "$WT"
 
-echo "==> bench_before.log (hot path at ${BASELINE_COMMIT}, bench suite at HEAD)"
-restore_hotpath "$BASELINE_COMMIT"
-stash_hotpath_tests
-"${BENCH_CMD[@]}" 2>&1 | tee "${SCRATCH}/bench_before.log"
-
-echo "==> bench_after.log (optimized hot path from working tree stash)"
-for f in "${HOTPATH_FILES[@]}" "${HOTPATH_TEST_FILES[@]}"; do
-	[[ -f $STASH/$f ]] && cp "$STASH/$f" "$f"
-done
+echo "==> bench_after.log (HEAD optimized hot path)"
 "${BENCH_CMD[@]}" 2>&1 | tee "${SCRATCH}/bench_after.log"
 
 echo "==> bench_run1.log"

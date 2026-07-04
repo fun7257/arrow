@@ -35,16 +35,10 @@ func finishRequest(ctx *Context, handler HandlerFunc) {
 	}
 }
 
-// hookRunNoMiddleware is set by tests to observe zero-middleware dispatch.
-var hookRunNoMiddleware func()
-
 // runNoMiddleware is the zero-middleware entry used by router registration and
 // pipeline.Run when len(middlewares)==0.
 func runNoMiddleware(ctx *Context, handler HandlerFunc) {
 	defer recoverAndRelease(ctx)
-	if hookRunNoMiddleware != nil {
-		hookRunNoMiddleware()
-	}
 	finishRequest(ctx, handler)
 }
 
