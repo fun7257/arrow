@@ -25,14 +25,27 @@ func (p *pipeline) clone() *pipeline {
 	}
 }
 
-// runNoMiddleware is used only by pipeline.Run when len(middlewares)==0.
-// Bench hot paths use the router inline closure instead (see router.register).
-func runNoMiddleware(ctx *Context, handler HandlerFunc) {
-	defer recoverAndRelease(ctx)
-	handler(ctx)
+// finishRequest runs the handler (unless aborted) then After callbacks in FIFO order.
+func finishRequest(ctx *Context, handler HandlerFunc) {
+	if !ctx.aborted {
+		handler(ctx)
+	}
 	for _, after := range ctx.afters {
 		after(ctx)
 	}
+}
+
+// hookRunNoMiddleware is set by tests to observe zero-middleware dispatch.
+var hookRunNoMiddleware func()
+
+// runNoMiddleware is the zero-middleware entry used by router registration and
+// pipeline.Run when len(middlewares)==0.
+func runNoMiddleware(ctx *Context, handler HandlerFunc) {
+	defer recoverAndRelease(ctx)
+	if hookRunNoMiddleware != nil {
+		hookRunNoMiddleware()
+	}
+	finishRequest(ctx, handler)
 }
 
 // Run executes the linear penetration pipeline:
@@ -52,13 +65,7 @@ func (p *pipeline) Run(ctx *Context, handler HandlerFunc) {
 		}
 	}
 
-	if !ctx.aborted {
-		handler(ctx)
-	}
-
-	for _, after := range ctx.afters {
-		after(ctx)
-	}
+	finishRequest(ctx, handler)
 }
 
 func recoverAndRelease(ctx *Context) {

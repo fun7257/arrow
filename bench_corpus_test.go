@@ -138,7 +138,7 @@ func TestBenchHotPathUsesHandler(t *testing.T) {
 		t.Fatalf("middleware app body = %q, want %q", recMW.Body.String(), wantBody)
 	}
 
-	// Zero-middleware router inline closure must still run After (bench hot path).
+	// Zero-middleware bench path uses runNoMiddleware (see TestRouterZeroMiddlewareUsesRunNoMiddleware).
 	var afterRan bool
 	appAfter := arrow.New()
 	appAfter.GET(s.Routes[0].Pattern, func(c *arrow.Context) {
@@ -148,7 +148,7 @@ func TestBenchHotPathUsesHandler(t *testing.T) {
 	recAfter := httptest.NewRecorder()
 	appAfter.Handler().ServeHTTP(recAfter, req)
 	if !afterRan {
-		t.Fatal("zero-middleware router inline path must execute After callbacks")
+		t.Fatal("zero-middleware runNoMiddleware path must execute After callbacks")
 	}
 	if recAfter.Body.String() != wantBody {
 		t.Fatalf("after app body = %q, want %q", recAfter.Body.String(), wantBody)

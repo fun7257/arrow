@@ -8,9 +8,9 @@ import (
 	"github.com/fun7257/arrow"
 )
 
-// Zero-middleware routes use the router inline closure (register-time), not
-// pipeline.Run. These tests drive app.Handler().ServeHTTP without app.Use —
-// the same path exercised by minimal/static benchmarks.
+// Zero-middleware routes dispatch via runNoMiddleware (router.register).
+// These tests drive app.Handler().ServeHTTP without app.Use — the same path
+// exercised by minimal/static benchmarks.
 
 func TestZeroMiddlewareAfterFromHandler(t *testing.T) {
 	var order []string
