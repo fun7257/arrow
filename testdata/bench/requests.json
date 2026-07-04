@@ -1,0 +1,10 @@
+{
+  "description": "Primary probe request per benchmark scenario (see matching corpus file).",
+  "probes": {
+    "minimal": {"method": "GET", "path": "/ping", "corpus": "minimal.json"},
+    "static": {"method": "GET", "path": "/api/v1/users", "corpus": "static.json"},
+    "parametric": {"method": "GET", "path": "/repos/golang/go/issues/42", "corpus": "parametric.json"},
+    "middleware": {"method": "GET", "path": "/api/v1/users", "corpus": "middleware.json"},
+    "large": {"method": "GET", "path": "/api/v3/resources/42", "corpus": "large.json"}
+  }
+}

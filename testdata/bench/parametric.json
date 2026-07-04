@@ -1,0 +1,20 @@
+{
+  "name": "parametric",
+  "description": "GitHub-style parameterized routes with PathValue segments.",
+  "routes": [
+    {"method": "GET", "pattern": "/users/{username}", "response": "user"},
+    {"method": "GET", "pattern": "/users/{username}/repos", "response": "user_repos"},
+    {"method": "GET", "pattern": "/orgs/{org}", "response": "org"},
+    {"method": "GET", "pattern": "/orgs/{org}/repos", "response": "org_repos"},
+    {"method": "GET", "pattern": "/repos/{owner}/{repo}", "response": "repo"},
+    {"method": "GET", "pattern": "/repos/{owner}/{repo}/issues", "response": "issues"},
+    {"method": "GET", "pattern": "/repos/{owner}/{repo}/issues/{number}", "response": "issue"},
+    {"method": "GET", "pattern": "/gists/{gist_id}", "response": "gist"}
+  ],
+  "requests": [
+    {"method": "GET", "path": "/users/octocat"},
+    {"method": "GET", "path": "/repos/golang/go"},
+    {"method": "GET", "path": "/repos/golang/go/issues/42"},
+    {"method": "GET", "path": "/gists/abc123"}
+  ]
+}

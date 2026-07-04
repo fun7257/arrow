@@ -1,0 +1,10 @@
+{
+  "name": "minimal",
+  "description": "Single route, minimal JSON-style response (ping/pong).",
+  "routes": [
+    {"method": "GET", "pattern": "/ping", "response": "pong"}
+  ],
+  "requests": [
+    {"method": "GET", "path": "/ping"}
+  ]
+}
