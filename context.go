@@ -1,6 +1,9 @@
 package arrow
 
-import "net/http"
+import (
+	"io"
+	"net/http"
+)
 
 // HandlerFunc is a request handler in the Arrow penetration model.
 type HandlerFunc func(*Context)
@@ -10,6 +13,7 @@ type Context struct {
 	Writer  http.ResponseWriter
 	Request *http.Request
 
+	statusW *statusWriter
 	aborted bool
 	code    int
 	written bool
@@ -18,15 +22,17 @@ type Context struct {
 }
 
 func newContext(w http.ResponseWriter, r *http.Request) *Context {
+	sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 	return &Context{
-		Writer:  &statusWriter{ResponseWriter: w, status: http.StatusOK},
+		Writer:  wrapResponseWriter(sw),
 		Request: r,
+		statusW: sw,
 	}
 }
 
 type statusWriter struct {
 	http.ResponseWriter
-	status int
+	status  int
 	written bool
 }
 
@@ -44,6 +50,64 @@ func (w *statusWriter) Write(b []byte) (int, error) {
 		w.WriteHeader(http.StatusOK)
 	}
 	return w.ResponseWriter.Write(b)
+}
+
+// Unwrap returns the underlying ResponseWriter for http.ResponseController.
+func (w *statusWriter) Unwrap() http.ResponseWriter {
+	return w.ResponseWriter
+}
+
+// multiWriter embeds optional interfaces only when the underlying writer
+// provides them. Nil embedded interfaces are omitted from the method set,
+// matching net/http type-assertion behavior.
+type multiWriter struct {
+	*statusWriter
+	http.Flusher
+	http.Hijacker
+	http.Pusher
+	readerFrom io.ReaderFrom
+}
+
+func (m *multiWriter) Unwrap() http.ResponseWriter {
+	return m.statusWriter
+}
+
+func (m *multiWriter) ReadFrom(r io.Reader) (int64, error) {
+	if m.readerFrom != nil {
+		return m.readerFrom.ReadFrom(r)
+	}
+	return io.Copy(m.statusWriter, r)
+}
+
+func wrapResponseWriter(sw *statusWriter) http.ResponseWriter {
+	w := sw.ResponseWriter
+	mw := &multiWriter{statusWriter: sw}
+	if f, ok := w.(http.Flusher); ok {
+		mw.Flusher = f
+	}
+	if h, ok := w.(http.Hijacker); ok {
+		mw.Hijacker = h
+	}
+	if p, ok := w.(http.Pusher); ok {
+		mw.Pusher = p
+	}
+	if rf, ok := w.(io.ReaderFrom); ok {
+		mw.readerFrom = &readerFromDelegator{inner: sw, delegate: rf}
+	}
+	return mw
+}
+
+// readerFromDelegator ensures WriteHeader runs before ReadFrom delegation.
+type readerFromDelegator struct {
+	inner    *statusWriter
+	delegate io.ReaderFrom
+}
+
+func (d *readerFromDelegator) ReadFrom(r io.Reader) (int64, error) {
+	if !d.inner.written {
+		d.inner.WriteHeader(http.StatusOK)
+	}
+	return d.delegate.ReadFrom(r)
 }
 
 // After registers post-handler logic. Callbacks run in registration order
@@ -80,8 +144,8 @@ func (c *Context) Status() int {
 	if c.aborted {
 		return c.code
 	}
-	if sw, ok := c.Writer.(*statusWriter); ok {
-		return sw.status
+	if c.statusW != nil {
+		return c.statusW.status
 	}
 	return 0
 }
