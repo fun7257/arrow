@@ -7,12 +7,12 @@
 #   ./skills/install.sh user     # global → ~/.grok/skills/arrow
 #
 # Remote (no clone):
-#   curl -fsSL https://raw.githubusercontent.com/fun7257/arrow/refs/heads/main/skills/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/fun7257/arrow/main/skills/install.sh | bash
 #   curl -fsSL .../skills/install.sh | bash -s user
 #   curl -fsSL .../skills/install.sh | bash -s project
 set -euo pipefail
 
-RAW_BASE="${ARROW_SKILL_RAW_BASE:-https://raw.githubusercontent.com/fun7257/arrow/refs/heads/main/skills/arrow}"
+RAW_BASE="${ARROW_SKILL_RAW_BASE:-https://raw.githubusercontent.com/fun7257/arrow/main/skills/arrow}"
 SCOPE="${1:-project}"
 
 script_path="${BASH_SOURCE[0]:-$0}"

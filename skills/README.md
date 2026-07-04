@@ -14,10 +14,10 @@
 
 ```bash
 # 全局（所有项目）→ ~/.grok/skills/arrow
-curl -fsSL https://raw.githubusercontent.com/fun7257/arrow/refs/heads/main/skills/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/fun7257/arrow/main/skills/install.sh | bash
 
 # 仅当前目录项目 → ./.grok/skills/arrow
-curl -fsSL https://raw.githubusercontent.com/fun7257/arrow/refs/heads/main/skills/install.sh | bash -s project
+curl -fsSL https://raw.githubusercontent.com/fun7257/arrow/main/skills/install.sh | bash -s project
 ```
 
 ### 仅本仓库生效（推荐协作者）
