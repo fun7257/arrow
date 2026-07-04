@@ -10,6 +10,16 @@
 
 ## 安装（Grok）
 
+### 一键安装（无需克隆仓库）
+
+```bash
+# 全局（所有项目）→ ~/.grok/skills/arrow
+curl -fsSL https://raw.githubusercontent.com/fun7257/arrow/refs/heads/main/skills/install.sh | bash
+
+# 仅当前目录项目 → ./.grok/skills/arrow
+curl -fsSL https://raw.githubusercontent.com/fun7257/arrow/refs/heads/main/skills/install.sh | bash -s project
+```
+
 ### 仅本仓库生效（推荐协作者）
 
 在仓库根目录执行：
