@@ -14,16 +14,49 @@ type Router struct {
 	pipe   *pipeline
 }
 
-func (r *Router) register(method, pattern string, handler HandlerFunc) {
+func (r *Router) muxPattern(method, pattern string) string {
 	fullPattern := joinPattern(r.prefix, pattern)
-	muxPattern := method + " " + fullPattern
+	if method == "" {
+		return fullPattern
+	}
+	return method + " " + fullPattern
+}
 
+func (r *Router) register(method, pattern string, handler HandlerFunc) {
+	muxPattern := r.muxPattern(method, pattern)
 	pipe := r.pipe
 	wrapped := func(w http.ResponseWriter, req *http.Request) {
 		ctx := newContext(w, req)
 		pipe.Run(ctx, handler)
 	}
 	r.mux.HandleFunc(muxPattern, wrapped)
+}
+
+func (r *Router) registerHTTP(method, pattern string, h http.Handler) {
+	fullPattern := joinPattern(r.prefix, pattern)
+	handler := h
+	muxPattern := r.muxPattern(method, pattern)
+
+	// Go 1.22+ ServeMux requires wildcard patterns for subtree handlers
+	// such as http.FileServer. StripPrefix is applied automatically.
+	if strings.HasSuffix(fullPattern, "/") && !strings.Contains(fullPattern, "{") {
+		dir := strings.TrimSuffix(fullPattern, "/")
+		handler = http.StripPrefix(fullPattern, h)
+		if method == "" {
+			muxPattern = dir + "/{path...}"
+		} else {
+			muxPattern = method + " " + dir + "/{path...}"
+		}
+	}
+
+	pipe := r.pipe
+	wrapped := func(w http.ResponseWriter, req *http.Request) {
+		ctx := newContext(w, req)
+		pipe.Run(ctx, func(c *Context) {
+			handler.ServeHTTP(c.Writer, c.Request)
+		})
+	}
+	r.mux.Handle(muxPattern, http.HandlerFunc(wrapped))
 }
 
 // GET registers a GET route.
@@ -61,9 +94,30 @@ func (r *Router) OPTIONS(pattern string, handler HandlerFunc) {
 	r.register(http.MethodOptions, pattern, handler)
 }
 
+// Any registers a route that matches all HTTP methods.
+func (r *Router) Any(pattern string, handler HandlerFunc) {
+	r.register("", pattern, handler)
+}
+
 // Handle registers a route with an arbitrary HTTP method.
+// Pass an empty method to match all methods.
 func (r *Router) Handle(method, pattern string, handler HandlerFunc) {
 	r.register(method, pattern, handler)
+}
+
+// HandleHTTP registers a standard library http.Handler for all methods.
+func (r *Router) HandleHTTP(pattern string, h http.Handler) {
+	r.registerHTTP("", pattern, h)
+}
+
+// HandleHTTPMethod registers a standard library http.Handler for a specific method.
+func (r *Router) HandleHTTPMethod(method, pattern string, h http.Handler) {
+	r.registerHTTP(method, pattern, h)
+}
+
+// Mux returns the underlying http.ServeMux for advanced use.
+func (r *Router) Mux() *http.ServeMux {
+	return r.mux
 }
 
 func joinPattern(prefix, pattern string) string {

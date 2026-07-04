@@ -34,8 +34,19 @@ func (r *Router) ListenAndServe(addr string) error {
 	return http.ListenAndServe(addr, r.engine)
 }
 
+// ListenAndServeTLS starts the HTTPS server on addr with the given certificate.
+func (r *Router) ListenAndServeTLS(addr, certFile, keyFile string) error {
+	return http.ListenAndServeTLS(addr, certFile, keyFile, r.engine)
+}
+
 // Serve starts the server with the given http.Server.
 func (r *Router) Serve(srv *http.Server) error {
 	srv.Handler = r.engine
 	return srv.ListenAndServe()
+}
+
+// ServeTLS starts the server with TLS using the given http.Server.
+func (r *Router) ServeTLS(srv *http.Server, certFile, keyFile string) error {
+	srv.Handler = r.engine
+	return srv.ListenAndServeTLS(certFile, keyFile)
 }
