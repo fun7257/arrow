@@ -106,4 +106,4 @@ scripts/run_perf.sh · stress_test.sh
 
 ## Maintenance
 
-When changing public API, middleware semantics, or `target` functions, update this skill and `references/` together with `README.md`.
+When changing public API, middleware semantics, or `target` functions, update `skills/arrow/` (this tree) and `README.md`, then run `./skills/install.sh` for local Grok.

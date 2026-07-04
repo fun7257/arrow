@@ -80,5 +80,6 @@ curl http://localhost:8080/health
 | 文件 | 受众 |
 |------|------|
 | `README.md` | 人类用户 |
-| `.grok/skills/arrow/SKILL.md` | AI agent（本 skill） |
+| `skills/arrow/SKILL.md` | AI agent（本 skill 源文件） |
+| `skills/README.md` | Skill 安装说明 |
 | `testdata/bench/README.md` | 性能测试 |
