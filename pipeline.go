@@ -30,6 +30,14 @@ func (p *pipeline) clone() *pipeline {
 func (p *pipeline) Run(ctx *Context, handler HandlerFunc) {
 	defer recoverAndRelease(ctx)
 
+	if len(p.middlewares) == 0 {
+		handler(ctx)
+		for _, after := range ctx.afters {
+			after(ctx)
+		}
+		return
+	}
+
 	for _, mw := range p.middlewares {
 		mw(ctx)
 		if ctx.aborted {

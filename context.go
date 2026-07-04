@@ -23,6 +23,7 @@ type Context struct {
 
 	wrapMask int8
 	wrapPtr  any
+	inlineF  wrapF
 }
 
 func newContext(w http.ResponseWriter, r *http.Request) *Context {
@@ -88,7 +89,7 @@ func (c *Context) Abort(code int) {
 	c.aborted = true
 	c.code = code
 	if !c.written {
-		c.Writer.WriteHeader(code)
+		c.sw.WriteHeader(code)
 		c.written = true
 	}
 }
@@ -137,11 +138,11 @@ func (c *Context) Get(key string) (any, bool) {
 
 // WriteHeader records the response status.
 func (c *Context) WriteHeader(code int) {
-	c.Writer.WriteHeader(code)
+	c.sw.WriteHeader(code)
 	c.written = true
 }
 
 // Write writes response data.
 func (c *Context) Write(b []byte) (int, error) {
-	return c.Writer.Write(b)
+	return c.sw.Write(b)
 }

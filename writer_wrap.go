@@ -5,6 +5,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"reflect"
 	"sync"
 )
 
@@ -32,9 +33,49 @@ func releaseWrap(c *Context) {
 	if c.wrapPtr == nil {
 		return
 	}
-	wrapPools[c.wrapMask].Put(c.wrapPtr)
+	if c.wrapPtr == &c.inlineF {
+		c.inlineF = wrapF{}
+	} else {
+		wrapPools[c.wrapMask].Put(c.wrapPtr)
+	}
 	c.wrapPtr = nil
 	c.wrapMask = 0
+}
+
+var writerMaskCache sync.Map // map[reflect.Type]uint8
+
+func writerIfaceMask(w http.ResponseWriter) (mask uint8, f http.Flusher, h http.Hijacker, p http.Pusher, rf io.ReaderFrom) {
+	t := reflect.TypeOf(w)
+	if v, ok := writerMaskCache.Load(t); ok {
+		mask = v.(uint8)
+	} else {
+		if _, ok := w.(http.Flusher); ok {
+			mask |= 1
+		}
+		if _, ok := w.(http.Hijacker); ok {
+			mask |= 2
+		}
+		if _, ok := w.(http.Pusher); ok {
+			mask |= 4
+		}
+		if _, ok := w.(io.ReaderFrom); ok {
+			mask |= 8
+		}
+		writerMaskCache.Store(t, mask)
+	}
+	if mask&1 != 0 {
+		f, _ = w.(http.Flusher)
+	}
+	if mask&2 != 0 {
+		h, _ = w.(http.Hijacker)
+	}
+	if mask&4 != 0 {
+		p, _ = w.(http.Pusher)
+	}
+	if mask&8 != 0 {
+		rf, _ = w.(io.ReaderFrom)
+	}
+	return mask, f, h, p, rf
 }
 
 // wrapResponseWriter returns a ResponseWriter that tracks status and exposes
@@ -43,36 +84,17 @@ func releaseWrap(c *Context) {
 // type assertions (see Go promotion rules for embedded interface fields).
 func wrapResponseWriter(sw *statusWriter, c *Context) http.ResponseWriter {
 	w := sw.ResponseWriter
-
-	f, hasF := w.(http.Flusher)
-	h, hasH := w.(http.Hijacker)
-	p, hasP := w.(http.Pusher)
-	rf, hasR := w.(io.ReaderFrom)
-
-	mask := 0
-	if hasF {
-		mask |= 1
-	}
-	if hasH {
-		mask |= 2
-	}
-	if hasP {
-		mask |= 4
-	}
-	if hasR {
-		mask |= 8
-	}
+	mask, f, h, p, rf := writerIfaceMask(w)
 
 	switch mask {
 	case 0:
 		return sw
 	case 1:
-		wr := wrapPools[1].Get().(*wrapF)
-		wr.statusWriter = sw
-		wr.f = f
+		c.inlineF.statusWriter = sw
+		c.inlineF.f = f
 		c.wrapMask = 1
-		c.wrapPtr = wr
-		return wr
+		c.wrapPtr = &c.inlineF
+		return &c.inlineF
 	case 2:
 		wr := wrapPools[2].Get().(*wrapH)
 		wr.statusWriter = sw
