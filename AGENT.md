@@ -138,16 +138,21 @@ arrow/
 ### 4.4 中间件
 
 ```go
-app.Use(mw1, mw2)          // 链式，作用于本 Router 及之后创建的子组
-api := app.Group("/api")
-api.Use(auth)              // 仅 /api 子树
+app.Use(mw1, mw2)                    // 作用于本 Router 路由 + 之后创建的子组
+api := app.Group("/api")             // 创建时继承父级中间件快照（pipe.clone）
+api.Use(auth)                        // 仅 /api 子树追加
+v2 := app.Group("/v2").Use(rateLimit) // Group().Use() 可链式
 ```
 
-| 内置（`middleware` 包） | 阶段 | 说明 |
-|-------------------------|------|------|
-| `Recover()` | — | 启用 panic → 500 |
+**注意**：父级在 `Group()` **之后**新增的 `Use` 不会影响已创建子组。`Mux().Handle*` 直连注册会跳过 Arrow 中间件。
+
+| 内置（`middleware` 包，**仅此三个**） | 阶段 | 说明 |
+|--------------------------------------|------|------|
+| `Recover()` | — | 惯例注册；panic 由 `recoverAndRelease` 处理 → 500 |
 | `RequestID()` | Pre | 设置 `X-Request-ID`；`c.Get(middleware.RequestIDKey)` |
 | `Logger()` | After | 记录 method/path/status/耗时 |
+
+鉴权等中间件需自行实现，**不存在** `middleware.Auth()`。
 
 **自定义中间件模板**：
 

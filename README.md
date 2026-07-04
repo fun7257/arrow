@@ -63,7 +63,7 @@ func main() {
     api.GET("/posts/{id}", showPost)
     api.POST("/posts", createPost)
 
-    app.ListenAndServe(":8080")
+    app.ListenAndServe(":8080") // 完整示例见 examples/server
 }
 
 func showPost(c *arrow.Context) {
@@ -127,16 +127,20 @@ app.Handle("GET", "example.com/api", handler)
 
 ```go
 api := app.Group("/api")          // 路径前缀 /api
-api.Use(middleware.Auth())        // 组级中间件
+api.Use(auth)                     // 组级中间件（自定义 HandlerFunc）
 admin := api.Group("/admin")      // 嵌套前缀 /api/admin
 
 api.GET("/posts", list)           // → GET /api/posts
 admin.GET("/", dashboard)         // → GET /api/admin/
+
+// Use 支持链式调用
+v2 := app.Group("/api/v2").Use(rateLimit)
+v2.GET("/status", status)
 ```
 
-- `Group(prefix)` 返回子 `*Router`，继承父级已注册的中间件
-- 子组可继续 `Use()` 追加中间件
-- 兄弟组中间件互不影响
+- `Group(prefix)` 返回子 `*Router`，**创建时**继承父级已注册的中间件（`pipe.clone()` 快照）
+- 子组可继续 `Use()` 追加中间件；**之后**在父级新增的 `Use` 不会影响已创建的子组
+- 兄弟组中间件互不影响（见 `group_test.go`）
 
 ---
 
@@ -148,7 +152,9 @@ admin.GET("/", dashboard)         // → GET /api/admin/
 app.Use(middleware.Recover(), middleware.Logger())  // 支持链式调用
 ```
 
-中间件作用于当前 Router 及其之后创建的子组上注册的所有路由。
+中间件作用于：**在当前 Router 上注册的路由**，以及 **在此之后** 用该 Router 作为父级创建的子组上的路由。
+
+内置中间件包 `middleware` **仅提供** `Recover`、`RequestID`、`Logger` 三个函数；鉴权等业务中间件需自行实现（见上文 `auth` 示例）。
 
 ### 自定义中间件
 
@@ -181,7 +187,7 @@ func Auth() arrow.HandlerFunc {
 |------|------|
 | `Abort(code)` | 终止穿透，跳过后续 Pre 中间件和 Handler |
 | 已注册的 `After` | **仍然执行**（日志、指标不丢失） |
-| Panic | Pipeline 自动恢复，返回 500 |
+| Panic | `defer recoverAndRelease` 自动恢复，返回 500（建议注册 `middleware.Recover()`） |
 
 ---
 
@@ -213,11 +219,11 @@ func Auth() arrow.HandlerFunc {
 // 静态文件（自动适配 Go 1.22+ 通配符 + StripPrefix）
 app.HandleHTTP("/static/", http.FileServer(http.Dir("./public")))
 
-// 直接操作底层 mux
+// 高级：直接操作底层 mux（跳过 Arrow 中间件与 Context 包装，慎用）
 app.Mux().HandleFunc("GET /legacy", legacyHandler)
 ```
 
-挂载的标准库 Handler 同样经过当前 Router 的中间件管道。
+通过 `HandleHTTP` / `HandleHTTPMethod` 挂载的标准库 Handler **经过**当前 Router 的中间件管道；直接 `Mux().Handle*` 则与裸 `ServeMux` 行为一致。
 
 ---
 
@@ -321,12 +327,14 @@ target.WriteNegotiated(c, http.StatusOK, payload) // 按 Accept 选择 JSON/XML
 | `target.Problem` | RFC 7807 Problem Details |
 | `target.Page[T]` | 分页列表 `{items,total,page,size}` |
 | `target.Envelope[T]` | 统一包装 `{code,message,data}` |
+| `target.OKEnvelope` / `target.ErrorEnvelope` | 快捷 Envelope 响应 |
 
 ### 其他能力
 
 - 文本 / HTML / 字节 / 模板：`WritePlain`、`WriteHTML`、`WriteBytes`、`WriteTemplate`
 - 重定向：`WriteRedirect`、`Found`、`SeeOther` 等
-- 文件：`WriteFile`、`WriteAttachment`、`WriteFileFS`
+- 文件：`WriteFile`、`WriteAttachment`、`WriteFileFS`、`WriteAttachmentFS`
+- Problem Details：`WriteProblem`、`AbortProblem`
 - 流式 / SSE：`WriteStream(c, status, contentType, fn)`、`WriteStreamReader(c, status, contentType, r)`、`WriteSSE(c, fn func(*EventWriter) error)`
 - 头部：`SetHeader`、`SetHeaders`、`SetCookie`、`WriteWithHeaders`
 
@@ -340,7 +348,7 @@ target.WriteNegotiated(c, http.StatusOK, payload) // 按 Accept 选择 JSON/XML
 
 | 中间件 | 阶段 | 说明 |
 |--------|------|------|
-| `Recover()` | — | 启用 Pipeline panic 恢复（返回 500） |
+| `Recover()` | — | 惯例性注册；实际 panic 恢复由 pipeline/router 的 `recoverAndRelease` 执行 |
 | `RequestID()` | Pre | 生成或透传 `X-Request-ID` 请求头 |
 | `Logger()` | After | 记录 method、path、status、耗时 |
 
@@ -385,12 +393,13 @@ Arrow **不替换** `net/http`，而是增强它：
 
 ```
 arrow/
+├── AGENT.md           # AI Agent 使用手册
 ├── arrow.go           # 应用入口、服务器启动
 ├── context.go         # Context、Abort、After
-├── pipeline.go        # 线性穿透执行引擎
+├── pipeline.go        # 线性穿透执行引擎（executeZeroMiddleware）
 ├── router.go          # GET/POST/... 路由注册
-├── hotpath_dispatch.go # 零中间件热路径计数器（测试钩子）
-├── group.go           # 路由组
+├── hotpath_dispatch.go # 零中间件分发计数器（测试钩子）
+├── group.go           # 路由组（pipe.clone 继承中间件）
 ├── middleware.go      # Use 中间件注册
 ├── adapter.go         # Adapt / Linear 适配器
 ├── writer_wrap.go     # ResponseWriter 可选接口委托
@@ -400,7 +409,7 @@ arrow/
 │   ├── run_perf.sh    # 微基准 + 中等压力（推荐入口）
 │   └── stress_test.sh # 中等压力（examples/server）
 ├── examples/server/   # 标准示例服务（压力测试目标）
-├── middleware/        # 内置中间件（Recover、Logger、RequestID）
+├── middleware/        # 内置中间件（Recover、RequestID、Logger）
 └── target/            # HTTP 响应辅助（泛型 JSON/XML/错误/分页等）
 ```
 
@@ -439,7 +448,7 @@ Arrow 与 `net/http.ServeMux` 成对对比，计时路径经 `Router` → `Handl
 go test -bench=. -benchmem -count=1 -run='^$' ./...
 ```
 
-无全局中间件时，路由注册直接调用 `executeZeroMiddleware`（非 `pipeline.Run`）。由 `TestBenchHotPathUsesRouterZeroMiddlewareDispatch` 等测试保障。
+无全局中间件时，路由注册内联 `executeZeroMiddleware`（不经 `pipeline.Run` / `runNoMiddleware`）；有 `app.Use` 时走 `pipeline.Run`。由 `TestBenchHotPathUsesRouterZeroMiddlewareDispatch` 等测试保障。
 
 ### 中等压力
 
