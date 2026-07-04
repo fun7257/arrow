@@ -28,7 +28,7 @@ func (p *pipeline) clone() *pipeline {
 // Run executes the linear penetration pipeline:
 // Pre (forward) -> Handler -> After (forward, FIFO).
 func (p *pipeline) Run(ctx *Context, handler HandlerFunc) {
-	defer recoverPanic(ctx)
+	defer recoverAndRelease(ctx)
 
 	for _, mw := range p.middlewares {
 		mw(ctx)
@@ -46,11 +46,12 @@ func (p *pipeline) Run(ctx *Context, handler HandlerFunc) {
 	}
 }
 
-func recoverPanic(ctx *Context) {
+func recoverAndRelease(ctx *Context) {
 	if r := recover(); r != nil {
 		log.Printf("arrow: panic recovered: %v\n%s", r, debug.Stack())
 		if !ctx.aborted {
 			ctx.Abort(http.StatusInternalServerError)
 		}
 	}
+	releaseContext(ctx)
 }

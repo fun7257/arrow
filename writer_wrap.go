@@ -5,13 +5,43 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"sync"
 )
+
+var wrapPools [16]sync.Pool
+
+func init() {
+	wrapPools[1].New = func() any { return &wrapF{} }
+	wrapPools[2].New = func() any { return &wrapH{} }
+	wrapPools[3].New = func() any { return &wrapFH{} }
+	wrapPools[4].New = func() any { return &wrapP{} }
+	wrapPools[5].New = func() any { return &wrapFP{} }
+	wrapPools[6].New = func() any { return &wrapHP{} }
+	wrapPools[7].New = func() any { return &wrapFHP{} }
+	wrapPools[8].New = func() any { return &wrapR{} }
+	wrapPools[9].New = func() any { return &wrapFR{} }
+	wrapPools[10].New = func() any { return &wrapHR{} }
+	wrapPools[11].New = func() any { return &wrapFHR{} }
+	wrapPools[12].New = func() any { return &wrapPR{} }
+	wrapPools[13].New = func() any { return &wrapFPR{} }
+	wrapPools[14].New = func() any { return &wrapHPR{} }
+	wrapPools[15].New = func() any { return &wrapFHPR{} }
+}
+
+func releaseWrap(c *Context) {
+	if c.wrapPtr == nil {
+		return
+	}
+	wrapPools[c.wrapMask].Put(c.wrapPtr)
+	c.wrapPtr = nil
+	c.wrapMask = 0
+}
 
 // wrapResponseWriter returns a ResponseWriter that tracks status and exposes
 // optional interfaces only when the underlying writer supports them.
 // Separate concrete types are used so nil embedded interfaces cannot satisfy
 // type assertions (see Go promotion rules for embedded interface fields).
-func wrapResponseWriter(sw *statusWriter) http.ResponseWriter {
+func wrapResponseWriter(sw *statusWriter, c *Context) http.ResponseWriter {
 	w := sw.ResponseWriter
 
 	f, hasF := w.(http.Flusher)
@@ -37,35 +67,127 @@ func wrapResponseWriter(sw *statusWriter) http.ResponseWriter {
 	case 0:
 		return sw
 	case 1:
-		return &wrapF{sw, f}
+		wr := wrapPools[1].Get().(*wrapF)
+		wr.statusWriter = sw
+		wr.f = f
+		c.wrapMask = 1
+		c.wrapPtr = wr
+		return wr
 	case 2:
-		return &wrapH{sw, h}
+		wr := wrapPools[2].Get().(*wrapH)
+		wr.statusWriter = sw
+		wr.h = h
+		c.wrapMask = 2
+		c.wrapPtr = wr
+		return wr
 	case 3:
-		return &wrapFH{sw, f, h}
+		wr := wrapPools[3].Get().(*wrapFH)
+		wr.statusWriter = sw
+		wr.f = f
+		wr.h = h
+		c.wrapMask = 3
+		c.wrapPtr = wr
+		return wr
 	case 4:
-		return &wrapP{sw, p}
+		wr := wrapPools[4].Get().(*wrapP)
+		wr.statusWriter = sw
+		wr.p = p
+		c.wrapMask = 4
+		c.wrapPtr = wr
+		return wr
 	case 5:
-		return &wrapFP{sw, f, p}
+		wr := wrapPools[5].Get().(*wrapFP)
+		wr.statusWriter = sw
+		wr.f = f
+		wr.p = p
+		c.wrapMask = 5
+		c.wrapPtr = wr
+		return wr
 	case 6:
-		return &wrapHP{sw, h, p}
+		wr := wrapPools[6].Get().(*wrapHP)
+		wr.statusWriter = sw
+		wr.h = h
+		wr.p = p
+		c.wrapMask = 6
+		c.wrapPtr = wr
+		return wr
 	case 7:
-		return &wrapFHP{sw, f, h, p}
+		wr := wrapPools[7].Get().(*wrapFHP)
+		wr.statusWriter = sw
+		wr.f = f
+		wr.h = h
+		wr.p = p
+		c.wrapMask = 7
+		c.wrapPtr = wr
+		return wr
 	case 8:
-		return &wrapR{sw, &readerFromDelegator{inner: sw, delegate: rf}}
+		wr := wrapPools[8].Get().(*wrapR)
+		wr.statusWriter = sw
+		wr.d = readerFromDelegator{inner: sw, delegate: rf}
+		c.wrapMask = 8
+		c.wrapPtr = wr
+		return wr
 	case 9:
-		return &wrapFR{sw, f, &readerFromDelegator{inner: sw, delegate: rf}}
+		wr := wrapPools[9].Get().(*wrapFR)
+		wr.statusWriter = sw
+		wr.f = f
+		wr.d = readerFromDelegator{inner: sw, delegate: rf}
+		c.wrapMask = 9
+		c.wrapPtr = wr
+		return wr
 	case 10:
-		return &wrapHR{sw, h, &readerFromDelegator{inner: sw, delegate: rf}}
+		wr := wrapPools[10].Get().(*wrapHR)
+		wr.statusWriter = sw
+		wr.h = h
+		wr.d = readerFromDelegator{inner: sw, delegate: rf}
+		c.wrapMask = 10
+		c.wrapPtr = wr
+		return wr
 	case 11:
-		return &wrapFHR{sw, f, h, &readerFromDelegator{inner: sw, delegate: rf}}
+		wr := wrapPools[11].Get().(*wrapFHR)
+		wr.statusWriter = sw
+		wr.f = f
+		wr.h = h
+		wr.d = readerFromDelegator{inner: sw, delegate: rf}
+		c.wrapMask = 11
+		c.wrapPtr = wr
+		return wr
 	case 12:
-		return &wrapPR{sw, p, &readerFromDelegator{inner: sw, delegate: rf}}
+		wr := wrapPools[12].Get().(*wrapPR)
+		wr.statusWriter = sw
+		wr.p = p
+		wr.d = readerFromDelegator{inner: sw, delegate: rf}
+		c.wrapMask = 12
+		c.wrapPtr = wr
+		return wr
 	case 13:
-		return &wrapFPR{sw, f, p, &readerFromDelegator{inner: sw, delegate: rf}}
+		wr := wrapPools[13].Get().(*wrapFPR)
+		wr.statusWriter = sw
+		wr.f = f
+		wr.p = p
+		wr.d = readerFromDelegator{inner: sw, delegate: rf}
+		c.wrapMask = 13
+		c.wrapPtr = wr
+		return wr
 	case 14:
-		return &wrapHPR{sw, h, p, &readerFromDelegator{inner: sw, delegate: rf}}
+		wr := wrapPools[14].Get().(*wrapHPR)
+		wr.statusWriter = sw
+		wr.h = h
+		wr.p = p
+		wr.d = readerFromDelegator{inner: sw, delegate: rf}
+		c.wrapMask = 14
+		c.wrapPtr = wr
+		return wr
 	case 15:
-		return &wrapFHPR{sw, f, h, p, &readerFromDelegator{inner: sw, delegate: rf}}
+		wr := wrapPools[15].Get().(*wrapFHPR)
+		wr.statusWriter = sw
+		wr.f = f
+		wr.h = h
+		wr.p = p
+		wr.d = readerFromDelegator{inner: sw, delegate: rf}
+		c.wrapMask = 15
+		c.wrapPtr = wr
+		return wr
 	default:
 		return sw
 	}
@@ -80,7 +202,7 @@ type wrapF struct {
 	f http.Flusher
 }
 
-func (w *wrapF) Flush()               { w.f.Flush(); markFlushed(w.statusWriter) }
+func (w *wrapF) Flush()                    { w.f.Flush(); markFlushed(w.statusWriter) }
 func (w *wrapF) Unwrap() http.ResponseWriter { return w.statusWriter }
 
 type wrapH struct {
@@ -143,88 +265,88 @@ func (w *wrapFHP) Unwrap() http.ResponseWriter                     { return w.st
 
 type wrapR struct {
 	*statusWriter
-	rf io.ReaderFrom
+	d readerFromDelegator
 }
 
-func (w *wrapR) ReadFrom(r io.Reader) (int64, error) { return w.rf.ReadFrom(r) }
+func (w *wrapR) ReadFrom(r io.Reader) (int64, error) { return w.d.ReadFrom(r) }
 func (w *wrapR) Unwrap() http.ResponseWriter         { return w.statusWriter }
 
 type wrapFR struct {
 	*statusWriter
-	f  http.Flusher
-	rf io.ReaderFrom
+	f http.Flusher
+	d readerFromDelegator
 }
 
 func (w *wrapFR) Flush()                            { w.f.Flush(); markFlushed(w.statusWriter) }
-func (w *wrapFR) ReadFrom(r io.Reader) (int64, error) { return w.rf.ReadFrom(r) }
+func (w *wrapFR) ReadFrom(r io.Reader) (int64, error) { return w.d.ReadFrom(r) }
 func (w *wrapFR) Unwrap() http.ResponseWriter       { return w.statusWriter }
 
 type wrapHR struct {
 	*statusWriter
-	h  http.Hijacker
-	rf io.ReaderFrom
+	h http.Hijacker
+	d readerFromDelegator
 }
 
 func (w *wrapHR) Hijack() (net.Conn, *bufio.ReadWriter, error) { return w.h.Hijack() }
-func (w *wrapHR) ReadFrom(r io.Reader) (int64, error)          { return w.rf.ReadFrom(r) }
+func (w *wrapHR) ReadFrom(r io.Reader) (int64, error)          { return w.d.ReadFrom(r) }
 func (w *wrapHR) Unwrap() http.ResponseWriter                    { return w.statusWriter }
 
 type wrapFHR struct {
 	*statusWriter
-	f  http.Flusher
-	h  http.Hijacker
-	rf io.ReaderFrom
+	f http.Flusher
+	h http.Hijacker
+	d readerFromDelegator
 }
 
 func (w *wrapFHR) Flush()                                       { w.f.Flush(); markFlushed(w.statusWriter) }
 func (w *wrapFHR) Hijack() (net.Conn, *bufio.ReadWriter, error) { return w.h.Hijack() }
-func (w *wrapFHR) ReadFrom(r io.Reader) (int64, error)          { return w.rf.ReadFrom(r) }
+func (w *wrapFHR) ReadFrom(r io.Reader) (int64, error)          { return w.d.ReadFrom(r) }
 func (w *wrapFHR) Unwrap() http.ResponseWriter                  { return w.statusWriter }
 
 type wrapPR struct {
 	*statusWriter
-	p  http.Pusher
-	rf io.ReaderFrom
+	p http.Pusher
+	d readerFromDelegator
 }
 
 func (w *wrapPR) Push(target string, opts *http.PushOptions) error { return w.p.Push(target, opts) }
-func (w *wrapPR) ReadFrom(r io.Reader) (int64, error)             { return w.rf.ReadFrom(r) }
+func (w *wrapPR) ReadFrom(r io.Reader) (int64, error)             { return w.d.ReadFrom(r) }
 func (w *wrapPR) Unwrap() http.ResponseWriter                       { return w.statusWriter }
 
 type wrapFPR struct {
 	*statusWriter
-	f  http.Flusher
-	p  http.Pusher
-	rf io.ReaderFrom
+	f http.Flusher
+	p http.Pusher
+	d readerFromDelegator
 }
 
 func (w *wrapFPR) Flush()                                          { w.f.Flush(); markFlushed(w.statusWriter) }
 func (w *wrapFPR) Push(target string, opts *http.PushOptions) error { return w.p.Push(target, opts) }
-func (w *wrapFPR) ReadFrom(r io.Reader) (int64, error)           { return w.rf.ReadFrom(r) }
+func (w *wrapFPR) ReadFrom(r io.Reader) (int64, error)           { return w.d.ReadFrom(r) }
 func (w *wrapFPR) Unwrap() http.ResponseWriter                     { return w.statusWriter }
 
 type wrapHPR struct {
 	*statusWriter
-	h  http.Hijacker
-	p  http.Pusher
-	rf io.ReaderFrom
+	h http.Hijacker
+	p http.Pusher
+	d readerFromDelegator
 }
 
 func (w *wrapHPR) Hijack() (net.Conn, *bufio.ReadWriter, error)  { return w.h.Hijack() }
 func (w *wrapHPR) Push(target string, opts *http.PushOptions) error { return w.p.Push(target, opts) }
-func (w *wrapHPR) ReadFrom(r io.Reader) (int64, error)           { return w.rf.ReadFrom(r) }
+func (w *wrapHPR) ReadFrom(r io.Reader) (int64, error)           { return w.d.ReadFrom(r) }
 func (w *wrapHPR) Unwrap() http.ResponseWriter                     { return w.statusWriter }
 
 type wrapFHPR struct {
 	*statusWriter
-	f  http.Flusher
-	h  http.Hijacker
-	p  http.Pusher
-	rf io.ReaderFrom
+	f http.Flusher
+	h http.Hijacker
+	p http.Pusher
+	d readerFromDelegator
 }
 
 func (w *wrapFHPR) Flush()                                          { w.f.Flush(); markFlushed(w.statusWriter) }
 func (w *wrapFHPR) Hijack() (net.Conn, *bufio.ReadWriter, error)  { return w.h.Hijack() }
 func (w *wrapFHPR) Push(target string, opts *http.PushOptions) error { return w.p.Push(target, opts) }
-func (w *wrapFHPR) ReadFrom(r io.Reader) (int64, error)           { return w.rf.ReadFrom(r) }
+func (w *wrapFHPR) ReadFrom(r io.Reader) (int64, error)           { return w.d.ReadFrom(r) }
 func (w *wrapFHPR) Unwrap() http.ResponseWriter                     { return w.statusWriter }

@@ -13,21 +13,24 @@ type Context struct {
 	Writer  http.ResponseWriter
 	Request *http.Request
 
-	statusW *statusWriter
+	sw statusWriter
+
 	aborted bool
 	code    int
 	written bool
 	afters  []HandlerFunc
 	keys    map[string]any
+
+	wrapMask int8
+	wrapPtr  any
 }
 
 func newContext(w http.ResponseWriter, r *http.Request) *Context {
-	sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
-	return &Context{
-		Writer:  wrapResponseWriter(sw),
-		Request: r,
-		statusW: sw,
-	}
+	c := acquireContext()
+	c.Request = r
+	c.sw = statusWriter{ResponseWriter: w, status: http.StatusOK}
+	c.Writer = wrapResponseWriter(&c.sw, c)
+	return c
 }
 
 type statusWriter struct {
@@ -104,8 +107,8 @@ func (c *Context) Status() int {
 	if c.aborted {
 		return c.code
 	}
-	if c.statusW != nil {
-		return c.statusW.status
+	if c.sw.ResponseWriter != nil {
+		return c.sw.status
 	}
 	return 0
 }

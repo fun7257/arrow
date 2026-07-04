@@ -1,7 +1,6 @@
 package arrow_test
 
 import (
-	"io"
 	"net/http"
 	"testing"
 
@@ -31,9 +30,9 @@ func registerStdlibRoutes(tb testing.TB, mux *http.ServeMux, routes []BenchRoute
 
 func registerArrowRoutes(app *arrow.Router, routes []BenchRoute) {
 	for _, rt := range routes {
-		resp := rt.Response
+		body := []byte(rt.Response)
 		h := func(c *arrow.Context) {
-			io.WriteString(c.Writer, resp)
+			c.Write(body)
 		}
 		switch rt.Method {
 		case http.MethodGet:
@@ -79,10 +78,12 @@ func benchRequest(req BenchRequest) *http.Request {
 	return r
 }
 
+func noopAfter(c *arrow.Context) {}
+
 // noopMiddleware is a lightweight counter middleware for pipeline overhead measurement.
 func noopMiddleware() arrow.HandlerFunc {
 	return func(c *arrow.Context) {
-		c.After(func(c *arrow.Context) {})
+		c.After(noopAfter)
 	}
 }
 
