@@ -25,14 +25,11 @@ func (r *Router) muxPattern(method, pattern string) string {
 func (r *Router) register(method, pattern string, handler HandlerFunc) {
 	muxPattern := r.muxPattern(method, pattern)
 	if len(r.pipe.middlewares) == 0 {
-		// Bench hot path: inline closure (keep in sync with finishRequest semantics).
 		wrapped := func(w http.ResponseWriter, req *http.Request) {
+			zeroMiddlewareRouterDispatches.Add(1)
 			ctx := newContext(w, req)
 			defer recoverAndRelease(ctx)
-			handler(ctx)
-			for _, after := range ctx.afters {
-				after(ctx)
-			}
+			executeZeroMiddleware(ctx, handler)
 		}
 		r.mux.HandleFunc(muxPattern, wrapped)
 		return
@@ -63,13 +60,14 @@ func (r *Router) registerHTTP(method, pattern string, h http.Handler) {
 	}
 
 	if len(r.pipe.middlewares) == 0 {
+		h := handler
 		wrapped := func(w http.ResponseWriter, req *http.Request) {
+			zeroMiddlewareRouterDispatches.Add(1)
 			ctx := newContext(w, req)
 			defer recoverAndRelease(ctx)
-			handler.ServeHTTP(ctx.Writer, ctx.Request)
-			for _, after := range ctx.afters {
-				after(ctx)
-			}
+			executeZeroMiddleware(ctx, func(c *Context) {
+				h.ServeHTTP(c.Writer, c.Request)
+			})
 		}
 		r.mux.Handle(muxPattern, http.HandlerFunc(wrapped))
 		return

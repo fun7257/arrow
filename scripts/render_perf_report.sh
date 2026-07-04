@@ -112,8 +112,8 @@ Command: \`go test -bench=. -benchmem -count=1 -run='^$' ./...\`
 
 ## Hot path
 
-Zero-middleware benchmarks use the router inline closure (\`defer recoverAndRelease\` → handler → afters), equivalent to \`executeZeroMiddleware\` / \`runNoMiddleware\` for normal zero-mw requests.
-Verified by \`TestBenchHotPathExecutesZeroMiddlewareDispatch\`, \`TestZeroMiddlewareInlineEquivalentToRunNoMiddleware\`, and \`TestZeroMiddleware*\`.
+Zero-middleware benchmarks call \`executeZeroMiddleware\` via router registration (dispatch counter), not \`pipeline.Run\` / \`runNoMiddleware\`.
+Verified by \`TestBenchHotPathUsesRouterZeroMiddlewareDispatch\` (runtime counters), \`TestRouterZeroMiddlewareUsesExecuteZeroMiddleware\` (source), and \`TestServeZeroMiddlewareFromHTTPEquivalentToRunNoMiddleware\`.
 EOF
 
 cat >"$ANALYSIS" <<EOF
@@ -133,6 +133,8 @@ Auto-generated from \`bench_after.log\` vs \`bench_before.frozen.log\`. Numbers 
 
 Baseline before uses ${BASELINE_COMMIT:-95a1c24} hot-path files (\`router.go\`, \`pipeline.go\`, \`context.go\`, \`pool.go\`, \`writer_wrap.go\`) with the current HEAD benchmark suite for a fair apples-to-apples comparison.
 
+**Variance note:** \`bench_run1.log\` / \`bench_run2.log\` may differ slightly from \`bench_after.log\` (same command, CPU jitter). Step-5 gating uses the frozen before vs after pair only. Static may show no improvement or a small regression within noise (~1 ns/op); minimal is the primary gating scenario.
+
 ## Arrow vs Stdlib gap by scenario
 
 ### Minimal (${a_min} vs ${s_min}, +${g_min})
@@ -141,7 +143,7 @@ Arrow wraps every request in a pooled \`Context\`, \`statusWriter\`, and optiona
 
 ### Static (${a_sta} vs ${s_sta}, +${g_sta})
 
-Same per-request wrapper cost as minimal, plus \`ServeMux\` matching across a multi-route table. Arrow pays the framework envelope on every hit; stdlib only dispatches. Route count does not add middleware overhead here (zero-mw inline path).
+Same per-request wrapper cost as minimal, plus \`ServeMux\` matching across a multi-route table. Arrow pays the framework envelope on every hit; stdlib only dispatches. Route count does not add middleware overhead here (zero-mw \`serveZeroMiddlewareFromHTTP\` path). Static before→after change is within benchmark noise unless a dedicated static-only regression appears across multiple runs.
 
 ### Parametric (${a_par} vs ${s_par}, +${g_par})
 
@@ -157,7 +159,7 @@ Largest relative gap: Arrow runs a 5-layer linear penetration pipeline with \`Af
 
 ## What was optimized
 
-1. **Zero-middleware router fast path** — inline closure avoids \`pipeline.Run\` / \`runNoMiddleware\` call on bench hot path.
+1. **Zero-middleware router fast path** — router calls \`executeZeroMiddleware\` directly (not \`pipeline.Run\` / \`runNoMiddleware\`); runtime counters prove router dispatch.
 2. **Context pooling** — reuse \`Context\` and slice backing for \`afters\`.
 3. **Writer wrapping** — interface mask cache by type; inline \`wrapF\` for Flusher-only writers (recorder).
 4. **Direct \`statusWriter\` writes** — \`Context.Write\` / \`WriteHeader\` / \`Abort\` bypass \`c.Writer\` interface dispatch.

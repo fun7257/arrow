@@ -8,22 +8,43 @@ import (
 	"github.com/fun7257/arrow"
 )
 
-// TestBenchHotPathExecutesZeroMiddlewareDispatch drives the same buildArrowApp
-// path as BenchmarkArrow_Minimal/Static and verifies zero-middleware semantics
-// (handler, After, Abort, panic) without app.Use middleware.
-func TestBenchHotPathExecutesZeroMiddlewareDispatch(t *testing.T) {
+// TestBenchHotPathUsesRouterZeroMiddlewareDispatch drives buildArrowApp (same as
+// benchmarks) and asserts the request hits serveZeroMiddlewareFromHTTP, not
+// pipeline runNoMiddleware.
+func TestBenchHotPathUsesRouterZeroMiddlewareDispatch(t *testing.T) {
 	s := loadBenchScenario(t, "minimal.json")
 	wantBody := s.Routes[0].Response
 	req := benchRequest(probeRequest(s))
-	h := buildArrowApp(s)
 
+	arrow.ResetZeroMiddlewareDispatchCounters()
+	h := buildArrowApp(s)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
+
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 	if got := rec.Body.String(); got != wantBody {
 		t.Fatalf("body = %q, want %q", got, wantBody)
+	}
+	if got := arrow.ZeroMiddlewareRouterDispatches(); got != 1 {
+		t.Fatalf("router dispatches = %d, want 1 (serveZeroMiddlewareFromHTTP)", got)
+	}
+	if got := arrow.ZeroMiddlewarePipelineDispatches(); got != 0 {
+		t.Fatalf("pipeline dispatches = %d, want 0 (bench path must not use runNoMiddleware)", got)
+	}
+
+	// Static corpus uses the same zero-mw registration path.
+	arrow.ResetZeroMiddlewareDispatchCounters()
+	sStatic := loadBenchScenario(t, "static.json")
+	hStatic := buildArrowApp(sStatic)
+	recStatic := httptest.NewRecorder()
+	hStatic.ServeHTTP(recStatic, benchRequest(probeRequest(sStatic)))
+	if arrow.ZeroMiddlewareRouterDispatches() != 1 {
+		t.Fatalf("static router dispatches = %d, want 1", arrow.ZeroMiddlewareRouterDispatches())
+	}
+	if arrow.ZeroMiddlewarePipelineDispatches() != 0 {
+		t.Fatalf("static pipeline dispatches = %d, want 0", arrow.ZeroMiddlewarePipelineDispatches())
 	}
 
 	var afterRan bool
@@ -32,21 +53,31 @@ func TestBenchHotPathExecutesZeroMiddlewareDispatch(t *testing.T) {
 		c.After(func(c *arrow.Context) { afterRan = true })
 		c.Write([]byte(wantBody))
 	})
+	arrow.ResetZeroMiddlewareDispatchCounters()
 	recAfter := httptest.NewRecorder()
 	app.Handler().ServeHTTP(recAfter, req)
 	if !afterRan {
-		t.Fatal("zero-middleware bench path must run After callbacks")
+		t.Fatal("zero-middleware path must run After callbacks")
+	}
+	if arrow.ZeroMiddlewareRouterDispatches() != 1 {
+		t.Fatalf("after router dispatches = %d, want 1", arrow.ZeroMiddlewareRouterDispatches())
 	}
 
-	// Middleware must not run on the bench build path.
+	// Middleware path must use pipeline.Run (runNoMiddleware when depth>0 still
+	// goes through pipe.Run, but counters track runNoMiddleware only when
+	// len(middlewares)==0 inside Run — with middleware, pipeline path differs).
 	mwRan := false
 	appMW := arrow.New()
 	appMW.Use(func(c *arrow.Context) { mwRan = true })
 	registerArrowRoutes(appMW, s.Routes)
+	arrow.ResetZeroMiddlewareDispatchCounters()
 	recMW := httptest.NewRecorder()
 	appMW.Handler().ServeHTTP(recMW, req)
 	if !mwRan {
 		t.Fatal("sanity: middleware must run when app.Use is called")
+	}
+	if arrow.ZeroMiddlewareRouterDispatches() != 0 {
+		t.Fatalf("middleware router dispatches = %d, want 0", arrow.ZeroMiddlewareRouterDispatches())
 	}
 
 	recAbort := httptest.NewRecorder()

@@ -8,7 +8,7 @@ import (
 	"github.com/fun7257/arrow"
 )
 
-// Zero-middleware routes use the router inline closure (see router_dispatch_test.go).
+// Zero-middleware routes use executeZeroMiddleware via router (see router_dispatch_test.go).
 // These tests drive app.Handler().ServeHTTP without app.Use — the same path
 // exercised by minimal/static benchmarks.
 

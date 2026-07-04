@@ -17,7 +17,12 @@ BASELINE_COMMIT="${BASELINE_COMMIT:-95a1c24}"
 BENCH_CMD=(go test -bench=. -benchmem -count=1 -run='^$' ./...)
 HOTPATH_FILES=(router.go pipeline.go context.go pool.go writer_wrap.go)
 # HEAD-only tests that reference symbols absent from the baseline hot path.
-BASELINE_STASH_TESTS=(pipeline_internal_test.go)
+BASELINE_STASH_TESTS=(
+	pipeline_internal_test.go
+	router_source_test.go
+	hotpath_dispatch.go
+	export_test.go
+)
 
 cd "$REPO_ROOT"
 

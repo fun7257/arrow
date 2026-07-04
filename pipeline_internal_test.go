@@ -6,15 +6,6 @@ import (
 	"testing"
 )
 
-// simulateInlineZeroMiddleware mirrors the router zero-middleware inline closure.
-func simulateInlineZeroMiddleware(ctx *Context, handler HandlerFunc) {
-	defer recoverAndRelease(ctx)
-	handler(ctx)
-	for _, after := range ctx.afters {
-		after(ctx)
-	}
-}
-
 func TestRunNoMiddlewareAfterOrder(t *testing.T) {
 	var order []string
 
@@ -37,36 +28,23 @@ func TestRunNoMiddlewareAfterOrder(t *testing.T) {
 	}
 }
 
-func TestZeroMiddlewareInlineEquivalentToRunNoMiddleware(t *testing.T) {
-	t.Helper()
-
-	type outcome struct {
-		code       int
-		body       string
-		order      []string
-		afterRan   bool
-		handlerRan bool
-	}
-
-	runCase := func(label string, setup func(*Context), handler HandlerFunc, viaInline bool) outcome {
+func TestServeZeroMiddlewareFromHTTPEquivalentToRunNoMiddleware(t *testing.T) {
+	runCase := func(handler HandlerFunc, viaRouter bool) (code int, body string, handlerRan bool) {
 		rec := httptest.NewRecorder()
-		ctx := newContext(rec, httptest.NewRequest(http.MethodGet, "/", nil))
-		if setup != nil {
-			setup(ctx)
-		}
-		var o outcome
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		var ran bool
 		wrapped := func(c *Context) {
-			o.handlerRan = true
+			ran = true
 			handler(c)
 		}
-		if viaInline {
-			simulateInlineZeroMiddleware(ctx, wrapped)
+		resetZeroMiddlewareDispatchCounters()
+		if viaRouter {
+			serveZeroMiddlewareFromHTTP(rec, req, wrapped)
 		} else {
+			ctx := newContext(rec, req)
 			runNoMiddleware(ctx, wrapped)
 		}
-		o.code = rec.Code
-		o.body = rec.Body.String()
-		return o
+		return rec.Code, rec.Body.String(), ran
 	}
 
 	t.Run("handler and after", func(t *testing.T) {
@@ -74,13 +52,10 @@ func TestZeroMiddlewareInlineEquivalentToRunNoMiddleware(t *testing.T) {
 			c.After(func(c *Context) { c.Write([]byte("-after")) })
 			c.Write([]byte("handler"))
 		}
-		inline := runCase("inline", nil, handler, true)
-		viaRun := runCase("runNoMiddleware", nil, handler, false)
-		if inline.code != viaRun.code || inline.body != viaRun.body {
-			t.Fatalf("inline (%d,%q) != runNoMiddleware (%d,%q)", inline.code, inline.body, viaRun.code, viaRun.body)
-		}
-		if !inline.handlerRan || !viaRun.handlerRan {
-			t.Fatal("handler must run on both paths")
+		rCode, rBody, rRan := runCase(handler, true)
+		pCode, pBody, pRan := runCase(handler, false)
+		if rCode != pCode || rBody != pBody || !rRan || !pRan {
+			t.Fatalf("router (%d,%q) != pipeline (%d,%q)", rCode, rBody, pCode, pBody)
 		}
 	})
 
@@ -90,10 +65,10 @@ func TestZeroMiddlewareInlineEquivalentToRunNoMiddleware(t *testing.T) {
 			c.After(func(c *Context) { afterRan = true })
 			c.Abort(http.StatusTeapot)
 		}
-		inline := runCase("inline", nil, handler, true)
-		viaRun := runCase("runNoMiddleware", nil, handler, false)
-		if inline.code != http.StatusTeapot || viaRun.code != http.StatusTeapot {
-			t.Fatalf("status inline=%d run=%d", inline.code, viaRun.code)
+		rCode, _, _ := runCase(handler, true)
+		pCode, _, _ := runCase(handler, false)
+		if rCode != http.StatusTeapot || pCode != http.StatusTeapot {
+			t.Fatalf("status router=%d pipeline=%d", rCode, pCode)
 		}
 		if !afterRan {
 			t.Fatal("After must run after Abort on both paths")
@@ -102,10 +77,10 @@ func TestZeroMiddlewareInlineEquivalentToRunNoMiddleware(t *testing.T) {
 
 	t.Run("panic recovery", func(t *testing.T) {
 		handler := func(c *Context) { panic("boom") }
-		inline := runCase("inline", nil, handler, true)
-		viaRun := runCase("runNoMiddleware", nil, handler, false)
-		if inline.code != http.StatusInternalServerError || viaRun.code != http.StatusInternalServerError {
-			t.Fatalf("panic status inline=%d run=%d", inline.code, viaRun.code)
+		rCode, _, _ := runCase(handler, true)
+		pCode, _, _ := runCase(handler, false)
+		if rCode != http.StatusInternalServerError || pCode != http.StatusInternalServerError {
+			t.Fatalf("panic status router=%d pipeline=%d", rCode, pCode)
 		}
 	})
 }
@@ -122,5 +97,18 @@ func TestExecuteZeroMiddlewareSkipsHandlerWhenPreAborted(t *testing.T) {
 
 	if handlerRan {
 		t.Fatal("executeZeroMiddleware must skip handler when already aborted")
+	}
+}
+
+func TestRunNoMiddlewareIncrementsPipelineCounter(t *testing.T) {
+	resetZeroMiddlewareDispatchCounters()
+	rec := httptest.NewRecorder()
+	ctx := newContext(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	runNoMiddleware(ctx, func(c *Context) {})
+	if zeroMiddlewarePipelineDispatches.Load() != 1 {
+		t.Fatalf("pipeline dispatches = %d, want 1", zeroMiddlewarePipelineDispatches.Load())
+	}
+	if zeroMiddlewareRouterDispatches.Load() != 0 {
+		t.Fatalf("router dispatches = %d, want 0", zeroMiddlewareRouterDispatches.Load())
 	}
 }
