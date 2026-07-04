@@ -25,7 +25,8 @@ func (r *Router) muxPattern(method, pattern string) string {
 func (r *Router) register(method, pattern string, handler HandlerFunc) {
 	muxPattern := r.muxPattern(method, pattern)
 	if len(r.pipe.middlewares) == 0 {
-		// Inlined runNoMiddleware — keep in sync with pipeline.runNoMiddleware.
+		// Bench scenarios (minimal/static/…) register without global middleware;
+		// the hot path is this inline closure, not pipeline.Run.
 		wrapped := func(w http.ResponseWriter, req *http.Request) {
 			ctx := newContext(w, req)
 			defer recoverAndRelease(ctx)

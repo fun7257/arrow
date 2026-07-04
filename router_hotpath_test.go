@@ -8,9 +8,9 @@ import (
 	"github.com/fun7257/arrow"
 )
 
-// Zero-middleware routes use pipeline.runNoMiddleware via pipe.Run.
-// These tests drive app.Handler().ServeHTTP without app.Use so minimal/static
-// benchmarks share the same recover/After semantics as middleware routes.
+// Zero-middleware routes use the router inline closure (register-time), not
+// pipeline.Run. These tests drive app.Handler().ServeHTTP without app.Use —
+// the same path exercised by minimal/static benchmarks.
 
 func TestZeroMiddlewareAfterFromHandler(t *testing.T) {
 	var order []string

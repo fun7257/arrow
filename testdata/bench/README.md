@@ -24,8 +24,8 @@ go test -bench=. -benchmem -count=1 -run='^$' ./...
 Each benchmark pair (`BenchmarkArrow_*` / `BenchmarkStdlib_*`) shares the same
 corpus and issues `ServeHTTP` on the real `app.Handler()` or `http.ServeMux`.
 Minimal, static, parametric, and large scenarios use zero global middleware and
-exercise `pipeline.Run` with an empty middleware slice (`TestBenchHotPathUsesHandler`,
-`TestZeroMiddleware*`).
+exercise the router inline closure registered at route setup — not `pipeline.Run`
+(`TestBenchHotPathUsesHandler`, `TestZeroMiddleware*`).
 
 Probe requests in `requests.json` must match each corpus file's first `requests`
 entry (`TestBenchProbeRequestsAlignWithCorpus`).

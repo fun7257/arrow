@@ -25,8 +25,8 @@ func (p *pipeline) clone() *pipeline {
 	}
 }
 
-// runNoMiddleware is the shared zero-middleware entry. Router registration
-// inlines an equivalent closure for performance; keep both in sync.
+// runNoMiddleware is used only by pipeline.Run when len(middlewares)==0.
+// Bench hot paths use the router inline closure instead (see router.register).
 func runNoMiddleware(ctx *Context, handler HandlerFunc) {
 	defer recoverAndRelease(ctx)
 	handler(ctx)
