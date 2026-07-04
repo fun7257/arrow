@@ -9,8 +9,8 @@ import (
 )
 
 // TestBenchHotPathUsesRouterZeroMiddlewareDispatch drives buildArrowApp (same as
-// benchmarks) and asserts the request hits serveZeroMiddlewareFromHTTP, not
-// pipeline runNoMiddleware.
+// benchmarks) and asserts the request hits the router zero-mw path
+// (executeZeroMiddleware + dispatch counter), not pipeline runNoMiddleware.
 func TestBenchHotPathUsesRouterZeroMiddlewareDispatch(t *testing.T) {
 	s := loadBenchScenario(t, "minimal.json")
 	wantBody := s.Routes[0].Response
@@ -28,7 +28,7 @@ func TestBenchHotPathUsesRouterZeroMiddlewareDispatch(t *testing.T) {
 		t.Fatalf("body = %q, want %q", got, wantBody)
 	}
 	if got := arrow.ZeroMiddlewareRouterDispatches(); got != 1 {
-		t.Fatalf("router dispatches = %d, want 1 (serveZeroMiddlewareFromHTTP)", got)
+		t.Fatalf("router dispatches = %d, want 1 (router zero-mw path)", got)
 	}
 	if got := arrow.ZeroMiddlewarePipelineDispatches(); got != 0 {
 		t.Fatalf("pipeline dispatches = %d, want 0 (bench path must not use runNoMiddleware)", got)

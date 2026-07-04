@@ -8,6 +8,8 @@
 #   ./scripts/stress_test.sh
 #   BASE=http://127.0.0.1:8080 OUT=stress.log ./scripts/stress_test.sh
 #   START_SERVER=0 ./scripts/stress_test.sh   # server already running
+#
+# Documented in testdata/bench/README.md (medium stress section).
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"

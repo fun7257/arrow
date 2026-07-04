@@ -10,6 +10,13 @@
 //	curl http://localhost:8080/api/v1/posts
 //	curl -H "Authorization: Bearer demo-token" http://localhost:8080/api/v1/posts/1
 //	curl -X POST -H "Authorization: Bearer demo-token" -d '{"title":"hello"}' http://localhost:8080/api/v1/posts
+//
+// Medium load test (auto-starts this server unless START_SERVER=0):
+//
+//	./scripts/stress_test.sh
+//	./scripts/run_perf.sh
+//
+// See testdata/bench/README.md for the full performance test layout.
 package main
 
 import (

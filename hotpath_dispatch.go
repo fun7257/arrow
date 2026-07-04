@@ -15,8 +15,9 @@ func resetZeroMiddlewareDispatchCounters() {
 	zeroMiddlewarePipelineDispatches.Store(0)
 }
 
-// serveZeroMiddlewareFromHTTP is the unified zero-middleware entry for router
-// registration. Benchmarks without app.Use hit this path, not runNoMiddleware.
+// serveZeroMiddlewareFromHTTP mirrors the router zero-middleware path for tests
+// (newContext → recoverAndRelease → executeZeroMiddleware). Production router
+// registration inlines the same steps; benchmarks without app.Use hit that path.
 func serveZeroMiddlewareFromHTTP(w http.ResponseWriter, req *http.Request, handler HandlerFunc) {
 	zeroMiddlewareRouterDispatches.Add(1)
 	ctx := newContext(w, req)

@@ -387,10 +387,17 @@ arrow/
 ├── context.go         # Context、Abort、After
 ├── pipeline.go        # 线性穿透执行引擎
 ├── router.go          # GET/POST/... 路由注册
+├── hotpath_dispatch.go # 零中间件热路径计数器（测试钩子）
 ├── group.go           # 路由组
 ├── middleware.go      # Use 中间件注册
 ├── adapter.go         # Adapt / Linear 适配器
 ├── writer_wrap.go     # ResponseWriter 可选接口委托
+├── bench_*.go         # 微基准与夹具测试
+├── testdata/bench/    # 基准夹具 JSON（见目录内 README）
+├── scripts/
+│   ├── run_perf.sh    # 微基准 + 中等压力（推荐入口）
+│   └── stress_test.sh # 中等压力（examples/server）
+├── examples/server/   # 标准示例服务（压力测试目标）
 ├── middleware/        # 内置中间件（Recover、Logger、RequestID）
 └── target/            # HTTP 响应辅助（泛型 JSON/XML/错误/分页等）
 ```
@@ -399,21 +406,57 @@ arrow/
 
 ## 性能测试
 
-两套互补测试，详见 `testdata/bench/README.md`：
+两套互补测试，完整说明见 [`testdata/bench/README.md`](testdata/bench/README.md)。
 
-**微基准**（Arrow vs `net/http.ServeMux`，五类场景）：
+### 一键运行（推荐）
+
+```bash
+./scripts/run_perf.sh
+```
+
+依次执行微基准与中等压力测试。保存输出：
+
+```bash
+BENCH_COUNT=3 OUT_DIR=./perf-out ./scripts/run_perf.sh
+# 生成 perf-out/bench.log、perf-out/stress.log
+```
+
+### 微基准
+
+Arrow 与 `net/http.ServeMux` 成对对比，计时路径经 `Router` → `Handler()` → `ServeHTTP`：
+
+| 场景 | 说明 |
+|------|------|
+| minimal | 单路由最小响应 |
+| static | 多路由静态表 |
+| parametric | `{param}` 路径参数 |
+| middleware | 静态表 + 5 层 noop 中间件 |
+| large | 120 路由大型表 |
 
 ```bash
 go test -bench=. -benchmem -count=1 -run='^$' ./...
 ```
 
-**中等压力**（`examples/server`，默认 30s × 3 端点，并发 100/50）：
+无全局中间件时，路由注册直接调用 `executeZeroMiddleware`（非 `pipeline.Run`）。由 `TestBenchHotPathUsesRouterZeroMiddlewareDispatch` 等测试保障。
+
+### 中等压力
+
+对 `examples/server` 持续压测（默认每端点 **30s**，`/health` 并发 **100**，API 并发 **50**）：
 
 ```bash
 ./scripts/stress_test.sh
-# 或一次跑完微基准 + 压力：
-./scripts/run_perf.sh
 ```
+
+| 环境变量 | 默认值 | 含义 |
+|----------|--------|------|
+| `DURATION` | `30s` | 每端点持续时间（hey） |
+| `HEALTH_C` | `100` | `/health` 并发 |
+| `API_C` | `50` | API 端点并发 |
+| `PORT` | `8080` | 服务端口 |
+| `START_SERVER` | `1` | 自动启动 `examples/server` |
+| `OUT` | — | 将结果写入文件 |
+
+优先使用 [hey](https://github.com/rakyll/hey)；未安装时回退到系统 `ab`。
 
 ---
 

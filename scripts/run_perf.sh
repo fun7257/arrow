@@ -6,6 +6,8 @@
 # Usage:
 #   ./scripts/run_perf.sh
 #   BENCH_COUNT=3 OUT_DIR=./perf-out ./scripts/run_perf.sh
+#
+# See testdata/bench/README.md for scenario tables and environment variables.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"

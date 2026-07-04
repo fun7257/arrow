@@ -43,7 +43,7 @@ func executeZeroMiddleware(ctx *Context, handler HandlerFunc) {
 }
 
 // runNoMiddleware is the zero-middleware entry used by pipeline.Run when
-// len(middlewares)==0. Router registration uses serveZeroMiddlewareFromHTTP.
+// len(middlewares)==0. Router registration inlines executeZeroMiddleware.
 func runNoMiddleware(ctx *Context, handler HandlerFunc) {
 	zeroMiddlewarePipelineDispatches.Add(1)
 	defer recoverAndRelease(ctx)
