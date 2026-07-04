@@ -35,11 +35,18 @@ func finishRequest(ctx *Context, handler HandlerFunc) {
 	}
 }
 
-// runNoMiddleware is the zero-middleware entry used by router registration and
-// pipeline.Run when len(middlewares)==0.
+// executeZeroMiddleware is the shared handler+after body for zero-middleware
+// requests. Router inlines this logic (no pre-abort on zero-mw registration);
+// runNoMiddleware and pipeline.Run call through finishRequest.
+func executeZeroMiddleware(ctx *Context, handler HandlerFunc) {
+	finishRequest(ctx, handler)
+}
+
+// runNoMiddleware is the zero-middleware entry used by pipeline.Run when
+// len(middlewares)==0. Router registration inlines the same semantics.
 func runNoMiddleware(ctx *Context, handler HandlerFunc) {
 	defer recoverAndRelease(ctx)
-	finishRequest(ctx, handler)
+	executeZeroMiddleware(ctx, handler)
 }
 
 // Run executes the linear penetration pipeline:

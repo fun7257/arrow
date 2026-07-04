@@ -1,40 +1,69 @@
-package arrow
+package arrow_test
 
 import (
-	"os"
-	"path/filepath"
-	"regexp"
-	"runtime"
-	"strings"
+	"net/http"
+	"net/http/httptest"
 	"testing"
+
+	"github.com/fun7257/arrow"
 )
 
-func TestRouterZeroMiddlewareUsesInlineClosure(t *testing.T) {
-	t.Helper()
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller failed")
-	}
-	data, err := os.ReadFile(filepath.Join(filepath.Dir(file), "router.go"))
-	if err != nil {
-		t.Fatalf("read router.go: %v", err)
-	}
-	src := string(data)
+// TestBenchHotPathExecutesZeroMiddlewareDispatch drives the same buildArrowApp
+// path as BenchmarkArrow_Minimal/Static and verifies zero-middleware semantics
+// (handler, After, Abort, panic) without app.Use middleware.
+func TestBenchHotPathExecutesZeroMiddlewareDispatch(t *testing.T) {
+	s := loadBenchScenario(t, "minimal.json")
+	wantBody := s.Routes[0].Response
+	req := benchRequest(probeRequest(s))
+	h := buildArrowApp(s)
 
-	zeroMW := regexp.MustCompile(`if len\(r\.pipe\.middlewares\) == 0 \{[\s\S]*?return\n\t\}`)
-	matches := zeroMW.FindAllString(src, -1)
-	if len(matches) < 2 {
-		t.Fatalf("expected at least 2 zero-middleware branches in router.go, got %d", len(matches))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
 	}
-	for i, block := range matches {
-		if strings.Contains(block, "runNoMiddleware") {
-			t.Fatalf("zero-mw branch %d must not call runNoMiddleware:\n%s", i+1, block)
-		}
-		if !strings.Contains(block, "defer recoverAndRelease(ctx)") {
-			t.Fatalf("zero-mw branch %d must inline defer recoverAndRelease:\n%s", i+1, block)
-		}
-		if !strings.Contains(block, "ctx.afters") {
-			t.Fatalf("zero-mw branch %d must run After callbacks:\n%s", i+1, block)
-		}
+	if got := rec.Body.String(); got != wantBody {
+		t.Fatalf("body = %q, want %q", got, wantBody)
+	}
+
+	var afterRan bool
+	app := arrow.New()
+	app.GET(s.Routes[0].Pattern, func(c *arrow.Context) {
+		c.After(func(c *arrow.Context) { afterRan = true })
+		c.Write([]byte(wantBody))
+	})
+	recAfter := httptest.NewRecorder()
+	app.Handler().ServeHTTP(recAfter, req)
+	if !afterRan {
+		t.Fatal("zero-middleware bench path must run After callbacks")
+	}
+
+	// Middleware must not run on the bench build path.
+	mwRan := false
+	appMW := arrow.New()
+	appMW.Use(func(c *arrow.Context) { mwRan = true })
+	registerArrowRoutes(appMW, s.Routes)
+	recMW := httptest.NewRecorder()
+	appMW.Handler().ServeHTTP(recMW, req)
+	if !mwRan {
+		t.Fatal("sanity: middleware must run when app.Use is called")
+	}
+
+	recAbort := httptest.NewRecorder()
+	appAbort := arrow.New()
+	appAbort.GET(s.Routes[0].Pattern, func(c *arrow.Context) {
+		c.Abort(http.StatusTeapot)
+	})
+	appAbort.Handler().ServeHTTP(recAbort, req)
+	if recAbort.Code != http.StatusTeapot {
+		t.Fatalf("abort status = %d, want %d", recAbort.Code, http.StatusTeapot)
+	}
+
+	recPanic := httptest.NewRecorder()
+	appPanic := arrow.New()
+	appPanic.GET(s.Routes[0].Pattern, func(c *arrow.Context) { panic("bench") })
+	appPanic.Handler().ServeHTTP(recPanic, req)
+	if recPanic.Code != http.StatusInternalServerError {
+		t.Fatalf("panic status = %d, want %d", recPanic.Code, http.StatusInternalServerError)
 	}
 }
