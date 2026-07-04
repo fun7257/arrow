@@ -2,17 +2,21 @@
 //
 // Scope: Arrow delegates routing to http.ServeMux, wraps http.ResponseWriter,
 // and exposes http.Handler mounting. Parity tests compare observable HTTP
-// outcomes (status, body, Allow, PathValue) between Arrow and a baseline mux.
+// outcomes (status, body, Allow, PathValue) and ResponseWriter optional
+// interface sets between Arrow and a baseline mux.
 // Out of scope: net/http Client, Transport, middleware execution semantics.
 package arrow_test
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+const parityPathValueHeader = "X-Parity-PathValue"
 
 // parityResult captures observable HTTP response fields for comparison.
 type parityResult struct {
@@ -22,13 +26,41 @@ type parityResult struct {
 	PathValue string
 }
 
+// rwInterfaces records which optional ResponseWriter interfaces are supported.
+type rwInterfaces struct {
+	Flusher    bool
+	Hijacker   bool
+	Pusher     bool
+	ReaderFrom bool
+}
+
+func probeRW(w http.ResponseWriter) rwInterfaces {
+	_, f := w.(http.Flusher)
+	_, h := w.(http.Hijacker)
+	_, p := w.(http.Pusher)
+	_, r := w.(io.ReaderFrom)
+	return rwInterfaces{Flusher: f, Hijacker: h, Pusher: p, ReaderFrom: r}
+}
+
+func (i rwInterfaces) String() string {
+	return fmt.Sprintf("F=%v,H=%v,P=%v,R=%v", i.Flusher, i.Hijacker, i.Pusher, i.ReaderFrom)
+}
+
+func assertRWParity(t *testing.T, name string, baseline, subject rwInterfaces) {
+	t.Helper()
+	if baseline != subject {
+		t.Errorf("%s: interface set baseline=%s subject=%s", name, baseline, subject)
+	}
+}
+
 func serveAndCapture(h http.Handler, req *http.Request) parityResult {
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, req)
 	return parityResult{
-		Status: rec.Code,
-		Body:   rec.Body.String(),
-		Allow:  rec.Header().Get("Allow"),
+		Status:    rec.Code,
+		Body:      rec.Body.String(),
+		Allow:     rec.Header().Get("Allow"),
+		PathValue: rec.Header().Get(parityPathValueHeader),
 	}
 }
 
@@ -45,6 +77,9 @@ func assertParity(t *testing.T, name string, baseline, subject http.Handler, req
 	}
 	if b.Allow != s.Allow {
 		t.Errorf("%s: Allow baseline=%q subject=%q", name, b.Allow, s.Allow)
+	}
+	if b.PathValue != s.PathValue {
+		t.Errorf("%s: PathValue baseline=%q subject=%q", name, b.PathValue, s.PathValue)
 	}
 }
 
@@ -99,6 +134,8 @@ func stdHandlerMethod(body string) http.Handler {
 
 func stdHandlerPathValue(key, prefix string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		io.WriteString(w, prefix+r.PathValue(key))
+		pv := r.PathValue(key)
+		w.Header().Set(parityPathValueHeader, pv)
+		io.WriteString(w, prefix+pv)
 	})
 }

@@ -10,6 +10,14 @@ import (
 	"github.com/fun7257/arrow"
 )
 
+func arrowHandlerPathValue(key, prefix string) arrow.HandlerFunc {
+	return func(c *arrow.Context) {
+		pv := c.Request.PathValue(key)
+		c.Writer.Header().Set(parityPathValueHeader, pv)
+		c.Write([]byte(prefix + pv))
+	}
+}
+
 // --- Routing parity (ServeMux semantics) ---
 
 func TestInheritParityGETRoute(t *testing.T) {
@@ -86,9 +94,7 @@ func TestInheritParityWildcardID(t *testing.T) {
 	registerBaselineHandler(baseline, http.MethodGet, "/posts/{id}", stdHandlerPathValue("id", "id="))
 
 	app := arrow.New()
-	app.GET("/posts/{id}", func(c *arrow.Context) {
-		c.Write([]byte("id=" + c.Request.PathValue("id")))
-	})
+	app.GET("/posts/{id}", arrowHandlerPathValue("id", "id="))
 
 	assertParity(t, "wildcard-id", baseline, app.Handler(), newRequest(http.MethodGet, "/posts/42", ""))
 }
@@ -98,9 +104,7 @@ func TestInheritParityWildcardEllipsis(t *testing.T) {
 	registerBaselineHandler(baseline, http.MethodGet, "/files/{path...}", stdHandlerPathValue("path", "path="))
 
 	app := arrow.New()
-	app.GET("/files/{path...}", func(c *arrow.Context) {
-		c.Write([]byte("path=" + c.Request.PathValue("path")))
-	})
+	app.GET("/files/{path...}", arrowHandlerPathValue("path", "path="))
 
 	assertParity(t, "wildcard-ellipsis", baseline, app.Handler(), newRequest(http.MethodGet, "/files/a/b/c", ""))
 }
@@ -133,9 +137,7 @@ func TestInheritParityRoutePrecedence(t *testing.T) {
 
 	app := arrow.New()
 	app.GET("/posts/latest", func(c *arrow.Context) { c.Write([]byte("latest")) })
-	app.GET("/posts/{id}", func(c *arrow.Context) {
-		c.Write([]byte("id=" + c.Request.PathValue("id")))
-	})
+	app.GET("/posts/{id}", arrowHandlerPathValue("id", "id="))
 
 	assertParity(t, "precedence-specific", baseline, app.Handler(), newRequest(http.MethodGet, "/posts/latest", ""))
 	assertParity(t, "precedence-wildcard", baseline, app.Handler(), newRequest(http.MethodGet, "/posts/99", ""))
@@ -143,9 +145,73 @@ func TestInheritParityRoutePrecedence(t *testing.T) {
 
 // --- ResponseWriter delegation parity ---
 
-func TestInheritParityFlusher(t *testing.T) {
+func TestInheritParityRWInterfacesRecorder(t *testing.T) {
+	var baseIF, arrowIF rwInterfaces
+
+	baseH := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		baseIF = probeRW(w)
+	})
+
+	app := arrow.New()
+	app.GET("/probe", func(c *arrow.Context) {
+		arrowIF = probeRW(c.Writer)
+	})
+
+	baseH.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
+	app.Handler().ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/probe", nil))
+
+	assertRWParity(t, "recorder", baseIF, arrowIF)
+}
+
+func TestInheritParityRWInterfacesServer(t *testing.T) {
+	probeHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.WriteString(w, probeRW(w).String())
+	})
+
 	baseline := http.NewServeMux()
-	registerBaselineHandler(baseline, http.MethodGet, "/flush", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	registerBaselineHandler(baseline, http.MethodGet, "/probe", probeHandler)
+
+	app := arrow.New()
+	app.GET("/probe", func(c *arrow.Context) {
+		io.WriteString(c.Writer, probeRW(c.Writer).String())
+	})
+
+	srvBase := httptest.NewServer(baseline)
+	defer srvBase.Close()
+	srvApp := httptest.NewServer(app.Handler())
+	defer srvApp.Close()
+
+	for name, url := range map[string]string{"baseline": srvBase.URL, "arrow": srvApp.URL} {
+		resp, err := http.Get(url + "/probe")
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("%s: status=%d", name, resp.StatusCode)
+		}
+		if name == "baseline" {
+			// store for parity compare below
+			_ = body
+		}
+	}
+
+	baseResp, _ := http.Get(srvBase.URL + "/probe")
+	baseBody, _ := io.ReadAll(baseResp.Body)
+	baseResp.Body.Close()
+
+	arrowResp, _ := http.Get(srvApp.URL + "/probe")
+	arrowBody, _ := io.ReadAll(arrowResp.Body)
+	arrowResp.Body.Close()
+
+	if string(baseBody) != string(arrowBody) {
+		t.Fatalf("server interface set: baseline=%s arrow=%s", baseBody, arrowBody)
+	}
+}
+
+func TestInheritParityFlusher(t *testing.T) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		f, ok := w.(http.Flusher)
 		if !ok {
 			http.Error(w, "no flusher", http.StatusInternalServerError)
@@ -153,7 +219,10 @@ func TestInheritParityFlusher(t *testing.T) {
 		}
 		f.Flush()
 		w.Write([]byte("flushed"))
-	}))
+	})
+
+	baseline := http.NewServeMux()
+	registerBaselineHandler(baseline, http.MethodGet, "/flush", handler)
 
 	app := arrow.New()
 	app.GET("/flush", func(c *arrow.Context) {
@@ -165,6 +234,8 @@ func TestInheritParityFlusher(t *testing.T) {
 		f.Flush()
 		c.Write([]byte("flushed"))
 	})
+
+	assertParity(t, "flush-recorder", baseline, app.Handler(), newRequest(http.MethodGet, "/flush", ""))
 
 	srvBase := httptest.NewServer(baseline)
 	defer srvBase.Close()
@@ -199,11 +270,14 @@ func TestInheritParityHijacker(t *testing.T) {
 	app := arrow.New()
 	app.GET("/hijack", func(c *arrow.Context) {
 		if _, ok := c.Writer.(http.Hijacker); !ok {
-			c.Abort(http.StatusInternalServerError)
+			http.Error(c.Writer, "no hijacker", http.StatusInternalServerError)
 			return
 		}
 		c.Write([]byte("hijack-ok"))
 	})
+
+	// recorder: neither supports Hijacker — both return 500
+	assertParity(t, "hijack-recorder", baseline, app.Handler(), newRequest(http.MethodGet, "/hijack", ""))
 
 	srvBase := httptest.NewServer(baseline)
 	defer srvBase.Close()
@@ -224,15 +298,17 @@ func TestInheritParityHijacker(t *testing.T) {
 }
 
 func TestInheritParityResponseControllerFlush(t *testing.T) {
-	baseline := http.NewServeMux()
-	registerBaselineHandler(baseline, http.MethodGet, "/rc", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		rc := http.NewResponseController(w)
 		if err := rc.Flush(); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		w.Write([]byte("rc-ok"))
-	}))
+	})
+
+	baseline := http.NewServeMux()
+	registerBaselineHandler(baseline, http.MethodGet, "/rc", handler)
 
 	app := arrow.New()
 	app.GET("/rc", func(c *arrow.Context) {
@@ -243,6 +319,8 @@ func TestInheritParityResponseControllerFlush(t *testing.T) {
 		}
 		c.Write([]byte("rc-ok"))
 	})
+
+	assertParity(t, "rc-recorder", baseline, app.Handler(), newRequest(http.MethodGet, "/rc", ""))
 
 	srvBase := httptest.NewServer(baseline)
 	defer srvBase.Close()
@@ -260,6 +338,30 @@ func TestInheritParityResponseControllerFlush(t *testing.T) {
 			t.Fatalf("%s: status=%d body=%q", name, resp.StatusCode, body)
 		}
 	}
+}
+
+func TestInheritParityReaderFromFileServer(t *testing.T) {
+	static := fstest.MapFS{"data.txt": &fstest.MapFile{Data: []byte("payload")}}
+
+	var baseIF, arrowIF rwInterfaces
+	probeBase := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		baseIF = probeRW(w)
+	})
+	probeApp := arrow.New()
+	probeApp.GET("/w", func(c *arrow.Context) {
+		arrowIF = probeRW(c.Writer)
+	})
+	probeBase.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/", nil))
+	probeApp.Handler().ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/w", nil))
+	assertRWParity(t, "fileserver-recorder-rf", baseIF, arrowIF)
+
+	baseline := http.NewServeMux()
+	registerBaselineHTTP(baseline, "", "/static/", http.FileServer(http.FS(static)))
+
+	app := arrow.New()
+	app.HandleHTTP("/static/", http.FileServer(http.FS(static)))
+
+	assertParity(t, "fileserver-body", baseline, app.Handler(), newRequest(http.MethodGet, "/static/data.txt", ""))
 }
 
 // --- Handler mounting parity ---

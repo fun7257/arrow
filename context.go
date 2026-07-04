@@ -57,46 +57,6 @@ func (w *statusWriter) Unwrap() http.ResponseWriter {
 	return w.ResponseWriter
 }
 
-// multiWriter embeds optional interfaces only when the underlying writer
-// provides them. Nil embedded interfaces are omitted from the method set,
-// matching net/http type-assertion behavior.
-type multiWriter struct {
-	*statusWriter
-	http.Flusher
-	http.Hijacker
-	http.Pusher
-	readerFrom io.ReaderFrom
-}
-
-func (m *multiWriter) Unwrap() http.ResponseWriter {
-	return m.statusWriter
-}
-
-func (m *multiWriter) ReadFrom(r io.Reader) (int64, error) {
-	if m.readerFrom != nil {
-		return m.readerFrom.ReadFrom(r)
-	}
-	return io.Copy(m.statusWriter, r)
-}
-
-func wrapResponseWriter(sw *statusWriter) http.ResponseWriter {
-	w := sw.ResponseWriter
-	mw := &multiWriter{statusWriter: sw}
-	if f, ok := w.(http.Flusher); ok {
-		mw.Flusher = f
-	}
-	if h, ok := w.(http.Hijacker); ok {
-		mw.Hijacker = h
-	}
-	if p, ok := w.(http.Pusher); ok {
-		mw.Pusher = p
-	}
-	if rf, ok := w.(io.ReaderFrom); ok {
-		mw.readerFrom = &readerFromDelegator{inner: sw, delegate: rf}
-	}
-	return mw
-}
-
 // readerFromDelegator ensures WriteHeader runs before ReadFrom delegation.
 type readerFromDelegator struct {
 	inner    *statusWriter
