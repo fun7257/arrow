@@ -397,6 +397,20 @@ arrow/
 
 ---
 
+## 性能基准
+
+五类场景（minimal / static / parametric / middleware / large）与 `net/http.ServeMux`
+成对对比，夹具见 `testdata/bench/`：
+
+```bash
+go test -bench=. -benchmem -count=1 -run='^$' ./...
+```
+
+计时路径经 `Router` → `Handler()` → `ServeHTTP`；无全局中间件的场景走
+`serveRequest` 热路径。详见 `testdata/bench/README.md`。
+
+---
+
 ## License
 
 见 [LICENSE](LICENSE) 文件。

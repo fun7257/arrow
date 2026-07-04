@@ -7,7 +7,9 @@
 //   - middleware: static table + 5-layer noop middleware stack
 //   - large:      120-route GitHub REST–style table
 //
-// Run: go test -bench=. -benchmem -count=1
+// Run: go test -bench=. -benchmem -count=1 -run='^$' ./...
+// Corpus/probe alignment: TestBenchCorpusLoads, TestBenchProbeRequestsAlignWithCorpus.
+// Hot path: TestBenchHotPathUsesHandler, TestZeroMiddleware* (router_hotpath_test.go).
 package arrow_test
 
 import (

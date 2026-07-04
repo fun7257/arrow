@@ -5,6 +5,8 @@ package arrow_test
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -63,6 +65,63 @@ func loadBenchScenario(tb testing.TB, filename string) BenchScenario {
 
 func probeRequest(s BenchScenario) BenchRequest {
 	return s.Requests[0]
+}
+
+// BenchProbeIndex maps scenario names to primary probe requests (testdata/bench/requests.json).
+type BenchProbeIndex struct {
+	Description string                       `json:"description"`
+	Probes      map[string]BenchProbeEntry   `json:"probes"`
+}
+
+type BenchProbeEntry struct {
+	Method string `json:"method"`
+	Path   string `json:"path"`
+	Corpus string `json:"corpus"`
+}
+
+func loadBenchProbeIndex(tb testing.TB) BenchProbeIndex {
+	tb.Helper()
+	path := filepath.Join(benchDataDir(), "requests.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		tb.Fatalf("read probe index: %v", err)
+	}
+	var idx BenchProbeIndex
+	if err := json.Unmarshal(data, &idx); err != nil {
+		tb.Fatalf("parse probe index: %v", err)
+	}
+	return idx
+}
+
+func TestBenchProbeRequestsAlignWithCorpus(t *testing.T) {
+	idx := loadBenchProbeIndex(t)
+	for name, probe := range idx.Probes {
+		s := loadBenchScenario(t, probe.Corpus)
+		if s.Name != "" && s.Name != name {
+			t.Errorf("%s: corpus name %q != probe key %q", probe.Corpus, s.Name, name)
+		}
+		first := probeRequest(s)
+		if first.Method != probe.Method || first.Path != probe.Path {
+			t.Errorf("%s: corpus probe %+v != index %+v", name, first, probe)
+		}
+	}
+}
+
+func TestBenchHotPathUsesHandler(t *testing.T) {
+	s := loadBenchScenario(t, "minimal.json")
+	h := buildArrowApp(s)
+	if h == nil {
+		t.Fatal("buildArrowApp returned nil handler")
+	}
+	req := benchRequest(probeRequest(s))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rec.Code)
+	}
+	if rec.Body.Len() == 0 {
+		t.Fatal("expected non-empty body from minimal scenario")
+	}
 }
 
 func TestBenchCorpusLoads(t *testing.T) {
