@@ -8,7 +8,7 @@ go get github.com/fun7257/arrow
 
 **要求：** Go 1.22+（依赖 `http.ServeMux` 路由增强）
 
-**AI Agent 使用手册：** [`AGENT.md`](AGENT.md)（穿透语义、API 速查、决策树、DO/DON'T）
+**AI Agent Skill：** [`.grok/skills/arrow/SKILL.md`](.grok/skills/arrow/SKILL.md)（穿透语义、API 速查、决策树；命令 `/arrow`）
 
 ---
 
@@ -393,7 +393,7 @@ Arrow **不替换** `net/http`，而是增强它：
 
 ```
 arrow/
-├── AGENT.md           # AI Agent 使用手册
+├── .grok/skills/arrow/ # AI Agent Skill（SKILL.md + references/）
 ├── arrow.go           # 应用入口、服务器启动
 ├── context.go         # Context、Abort、After
 ├── pipeline.go        # 线性穿透执行引擎（executeZeroMiddleware）
