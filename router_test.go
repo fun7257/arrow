@@ -58,8 +58,7 @@ func TestRouterMethods(t *testing.T) {
 func TestRouterPathValue(t *testing.T) {
 	app := arrow.New()
 	app.GET("/posts/{id}", func(c *arrow.Context) {
-		id := c.Request.PathValue("id")
-		c.Write([]byte(id))
+		c.Write([]byte(c.Request.PathValue("id")))
 	})
 
 	rec := httptest.NewRecorder()
@@ -69,9 +68,8 @@ func TestRouterPathValue(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d", rec.Code)
 	}
-	body, _ := io.ReadAll(rec.Body)
-	if string(body) != "42" {
-		t.Fatalf("body = %q, want %q", body, "42")
+	if got := rec.Body.String(); got != "42" {
+		t.Fatalf("body = %q, want 42", got)
 	}
 }
 
@@ -100,8 +98,106 @@ func TestNestedGroupPrefix(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/users/alice", nil)
 	app.Handler().ServeHTTP(rec, req)
 
-	body, _ := io.ReadAll(rec.Body)
-	if string(body) != "alice" {
-		t.Fatalf("body = %q, want alice", body)
+	if got := rec.Body.String(); got != "alice" {
+		t.Fatalf("body = %q, want alice", got)
+	}
+}
+
+func TestGroupMiddlewareInheritance(t *testing.T) {
+	var order []string
+
+	app := arrow.New()
+	app.Use(func(c *arrow.Context) { order = append(order, "global") })
+
+	api := app.Group("/api")
+	api.Use(func(c *arrow.Context) { order = append(order, "api") })
+	api.GET("/x", func(c *arrow.Context) { order = append(order, "handler") })
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/x", nil)
+	app.Handler().ServeHTTP(rec, req)
+
+	want := []string{"global", "api", "handler"}
+	for i, v := range want {
+		if order[i] != v {
+			t.Fatalf("order[%d] = %q, want %q (full: %v)", i, order[i], v, order)
+		}
+	}
+}
+
+func TestGroupMiddlewareNotInheritedBySibling(t *testing.T) {
+	apiCalled := false
+	adminCalled := false
+
+	app := arrow.New()
+	api := app.Group("/api")
+	api.Use(func(c *arrow.Context) { apiCalled = true })
+	api.GET("/x", func(c *arrow.Context) {})
+
+	admin := app.Group("/admin")
+	admin.Use(func(c *arrow.Context) { adminCalled = true })
+	admin.GET("/x", func(c *arrow.Context) {})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/admin/x", nil)
+	app.Handler().ServeHTTP(rec, req)
+
+	if apiCalled {
+		t.Fatal("api middleware should not run on admin routes")
+	}
+	if !adminCalled {
+		t.Fatal("admin middleware should run on admin routes")
+	}
+}
+
+func TestGroupExplicitUseRegistration(t *testing.T) {
+	called := false
+
+	app := arrow.New()
+	api := app.Group("/api")
+	api.Use(func(c *arrow.Context) { called = true })
+	api.GET("/x", func(c *arrow.Context) {})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/x", nil)
+	app.Handler().ServeHTTP(rec, req)
+
+	if !called {
+		t.Fatal("group Use middleware should run")
+	}
+}
+
+func TestZeroMiddlewareDispatchPath(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/ping", nil)
+
+	app := arrow.New()
+	app.GET("/ping", func(c *arrow.Context) { c.Write([]byte("pong")) })
+
+	arrow.ResetZeroMiddlewareDispatchCounters()
+	rec := httptest.NewRecorder()
+	app.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK || rec.Body.String() != "pong" {
+		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+	}
+	if got := arrow.ZeroMiddlewareRouterDispatches(); got != 1 {
+		t.Fatalf("router dispatches = %d, want 1", got)
+	}
+	if got := arrow.ZeroMiddlewarePipelineDispatches(); got != 0 {
+		t.Fatalf("pipeline dispatches = %d, want 0", got)
+	}
+
+	mwRan := false
+	appMW := arrow.New()
+	appMW.Use(func(c *arrow.Context) { mwRan = true })
+	appMW.GET("/ping", func(c *arrow.Context) { c.Write([]byte("pong")) })
+
+	arrow.ResetZeroMiddlewareDispatchCounters()
+	appMW.Handler().ServeHTTP(httptest.NewRecorder(), req)
+	if !mwRan {
+		t.Fatal("middleware must run when app.Use is called")
+	}
+	if arrow.ZeroMiddlewareRouterDispatches() != 0 {
+		t.Fatalf("middleware router dispatches = %d, want 0", arrow.ZeroMiddlewareRouterDispatches())
 	}
 }

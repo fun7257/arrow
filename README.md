@@ -64,7 +64,7 @@ func main() {
     api.GET("/posts/{id}", showPost)
     api.POST("/posts", createPost)
 
-    app.ListenAndServe(":8080") // 完整示例见 examples/server
+    app.ListenAndServe(":8080")
 }
 
 func showPost(c *arrow.Context) {
@@ -143,7 +143,7 @@ v2.GET("/status", status)
 - `Group(prefix)` 返回子路由作用域，**创建时**继承父级已注册的中间件（`pipe.clone()` 快照）
 - 组级中间件须先赋值再 `Use`：`api := app.Group("/api"); api.Use(auth)`（Group 与 Use 不能写在同一表达式）
 - 子组可继续 `Use()` 追加中间件；**之后**在父级新增的 `Use` 不会影响已创建的子组
-- 兄弟组中间件互不影响（见 `group_test.go`）
+- 兄弟组中间件互不影响（见 `router_test.go`）
 
 ---
 
@@ -378,7 +378,6 @@ arrow/
 ├── middleware.go      # Use 中间件注册
 
 ├── writer_wrap.go     # ResponseWriter 可选接口委托
-├── examples/server/   # 标准示例服务
 ├── middleware/        # 内置中间件（Recover、RequestID、Logger）
 └── target/            # HTTP 响应写入（开发者自定 body；RFC 7807 Problem）
 ```

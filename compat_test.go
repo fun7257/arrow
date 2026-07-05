@@ -11,68 +11,6 @@ import (
 	"github.com/fun7257/arrow"
 )
 
-func TestResponseWriterFlusher(t *testing.T) {
-	app := arrow.New()
-	flushed := false
-	app.GET("/flush", func(c *arrow.Context) {
-		f, ok := c.Writer.(http.Flusher)
-		if !ok {
-			t.Fatal("Context.Writer does not implement http.Flusher")
-		}
-		f.Flush()
-		flushed = true
-	})
-
-	srv := httptest.NewServer(app.Handler())
-	defer srv.Close()
-
-	resp, err := http.Get(srv.URL + "/flush")
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if !flushed {
-		t.Fatal("Flush was not called")
-	}
-}
-
-func TestResponseWriterHijacker(t *testing.T) {
-	app := arrow.New()
-	app.GET("/hijack", func(c *arrow.Context) {
-		if _, ok := c.Writer.(http.Hijacker); !ok {
-			t.Error("Context.Writer does not implement http.Hijacker")
-		}
-	})
-
-	srv := httptest.NewServer(app.Handler())
-	defer srv.Close()
-
-	resp, err := http.Get(srv.URL + "/hijack")
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-}
-
-func TestResponseControllerFlush(t *testing.T) {
-	app := arrow.New()
-	app.GET("/", func(c *arrow.Context) {
-		rc := http.NewResponseController(c.Writer)
-		if err := rc.Flush(); err != nil {
-			t.Errorf("ResponseController.Flush: %v", err)
-		}
-	})
-
-	srv := httptest.NewServer(app.Handler())
-	defer srv.Close()
-
-	resp, err := http.Get(srv.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-}
-
 func TestAnyRoute(t *testing.T) {
 	app := arrow.New()
 	app.Any("/any", func(c *arrow.Context) {

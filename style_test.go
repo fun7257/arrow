@@ -10,19 +10,16 @@ import (
 	"testing"
 )
 
-var forbiddenMiddlewarePatterns = []*regexp.Regexp{
+var forbiddenPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`Use\(` + `middleware\.Recover\(\),`),
 	regexp.MustCompile(`\.Use\([^)]*,`),
 	regexp.MustCompile(`Group\([^)]*\)\.Use\(`),
 }
 
-func TestRepoUsesClassicMiddlewareRegistration(t *testing.T) {
-	_, file, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatal("runtime.Caller failed")
-	}
-	root := filepath.Dir(file)
-
+func TestClassicMiddlewareRegistration(t *testing.T) {
+	root := repoRoot(t)
 	var violations []string
+
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -36,8 +33,7 @@ func TestRepoUsesClassicMiddlewareRegistration(t *testing.T) {
 		if !strings.HasSuffix(path, ".go") && !strings.HasSuffix(path, ".md") {
 			return nil
 		}
-		switch filepath.Base(path) {
-		case "middleware_style_test.go", "plan_verification_test.go":
+		if filepath.Base(path) == "style_test.go" {
 			return nil
 		}
 
@@ -46,7 +42,7 @@ func TestRepoUsesClassicMiddlewareRegistration(t *testing.T) {
 			return err
 		}
 		content := string(data)
-		for _, re := range forbiddenMiddlewarePatterns {
+		for _, re := range forbiddenPatterns {
 			if loc := re.FindStringIndex(content); loc != nil {
 				rel, _ := filepath.Rel(root, path)
 				violations = append(violations, rel+": "+content[loc[0]:loc[1]])
@@ -60,4 +56,13 @@ func TestRepoUsesClassicMiddlewareRegistration(t *testing.T) {
 	if len(violations) > 0 {
 		t.Fatalf("forbidden middleware registration patterns:\n%s", strings.Join(violations, "\n"))
 	}
+}
+
+func repoRoot(t *testing.T) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+	return filepath.Dir(file)
 }

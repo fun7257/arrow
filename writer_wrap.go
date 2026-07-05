@@ -224,7 +224,7 @@ type wrapF struct {
 	f http.Flusher
 }
 
-func (w *wrapF) Flush()                    { w.f.Flush(); markFlushed(w.statusWriter) }
+func (w *wrapF) Flush()                      { w.f.Flush(); markFlushed(w.statusWriter) }
 func (w *wrapF) Unwrap() http.ResponseWriter { return w.statusWriter }
 
 type wrapH struct {
@@ -251,7 +251,7 @@ type wrapP struct {
 }
 
 func (w *wrapP) Push(target string, opts *http.PushOptions) error { return w.p.Push(target, opts) }
-func (w *wrapP) Unwrap() http.ResponseWriter                       { return w.statusWriter }
+func (w *wrapP) Unwrap() http.ResponseWriter                      { return w.statusWriter }
 
 type wrapFP struct {
 	*statusWriter
@@ -259,9 +259,9 @@ type wrapFP struct {
 	p http.Pusher
 }
 
-func (w *wrapFP) Flush()                                          { w.f.Flush(); markFlushed(w.statusWriter) }
+func (w *wrapFP) Flush()                                           { w.f.Flush(); markFlushed(w.statusWriter) }
 func (w *wrapFP) Push(target string, opts *http.PushOptions) error { return w.p.Push(target, opts) }
-func (w *wrapFP) Unwrap() http.ResponseWriter                     { return w.statusWriter }
+func (w *wrapFP) Unwrap() http.ResponseWriter                      { return w.statusWriter }
 
 type wrapHP struct {
 	*statusWriter
@@ -269,9 +269,9 @@ type wrapHP struct {
 	p http.Pusher
 }
 
-func (w *wrapHP) Hijack() (net.Conn, *bufio.ReadWriter, error)  { return w.h.Hijack() }
+func (w *wrapHP) Hijack() (net.Conn, *bufio.ReadWriter, error)     { return w.h.Hijack() }
 func (w *wrapHP) Push(target string, opts *http.PushOptions) error { return w.p.Push(target, opts) }
-func (w *wrapHP) Unwrap() http.ResponseWriter                     { return w.statusWriter }
+func (w *wrapHP) Unwrap() http.ResponseWriter                      { return w.statusWriter }
 
 type wrapFHP struct {
 	*statusWriter
@@ -280,10 +280,10 @@ type wrapFHP struct {
 	p http.Pusher
 }
 
-func (w *wrapFHP) Flush()                                          { w.f.Flush(); markFlushed(w.statusWriter) }
-func (w *wrapFHP) Hijack() (net.Conn, *bufio.ReadWriter, error)  { return w.h.Hijack() }
+func (w *wrapFHP) Flush()                                           { w.f.Flush(); markFlushed(w.statusWriter) }
+func (w *wrapFHP) Hijack() (net.Conn, *bufio.ReadWriter, error)     { return w.h.Hijack() }
 func (w *wrapFHP) Push(target string, opts *http.PushOptions) error { return w.p.Push(target, opts) }
-func (w *wrapFHP) Unwrap() http.ResponseWriter                     { return w.statusWriter }
+func (w *wrapFHP) Unwrap() http.ResponseWriter                      { return w.statusWriter }
 
 type wrapR struct {
 	*statusWriter
@@ -299,9 +299,9 @@ type wrapFR struct {
 	d readerFromDelegator
 }
 
-func (w *wrapFR) Flush()                            { w.f.Flush(); markFlushed(w.statusWriter) }
+func (w *wrapFR) Flush()                              { w.f.Flush(); markFlushed(w.statusWriter) }
 func (w *wrapFR) ReadFrom(r io.Reader) (int64, error) { return w.d.ReadFrom(r) }
-func (w *wrapFR) Unwrap() http.ResponseWriter       { return w.statusWriter }
+func (w *wrapFR) Unwrap() http.ResponseWriter         { return w.statusWriter }
 
 type wrapHR struct {
 	*statusWriter
@@ -311,7 +311,7 @@ type wrapHR struct {
 
 func (w *wrapHR) Hijack() (net.Conn, *bufio.ReadWriter, error) { return w.h.Hijack() }
 func (w *wrapHR) ReadFrom(r io.Reader) (int64, error)          { return w.d.ReadFrom(r) }
-func (w *wrapHR) Unwrap() http.ResponseWriter                    { return w.statusWriter }
+func (w *wrapHR) Unwrap() http.ResponseWriter                  { return w.statusWriter }
 
 type wrapFHR struct {
 	*statusWriter
@@ -332,8 +332,8 @@ type wrapPR struct {
 }
 
 func (w *wrapPR) Push(target string, opts *http.PushOptions) error { return w.p.Push(target, opts) }
-func (w *wrapPR) ReadFrom(r io.Reader) (int64, error)             { return w.d.ReadFrom(r) }
-func (w *wrapPR) Unwrap() http.ResponseWriter                       { return w.statusWriter }
+func (w *wrapPR) ReadFrom(r io.Reader) (int64, error)              { return w.d.ReadFrom(r) }
+func (w *wrapPR) Unwrap() http.ResponseWriter                      { return w.statusWriter }
 
 type wrapFPR struct {
 	*statusWriter
@@ -342,10 +342,10 @@ type wrapFPR struct {
 	d readerFromDelegator
 }
 
-func (w *wrapFPR) Flush()                                          { w.f.Flush(); markFlushed(w.statusWriter) }
+func (w *wrapFPR) Flush()                                           { w.f.Flush(); markFlushed(w.statusWriter) }
 func (w *wrapFPR) Push(target string, opts *http.PushOptions) error { return w.p.Push(target, opts) }
-func (w *wrapFPR) ReadFrom(r io.Reader) (int64, error)           { return w.d.ReadFrom(r) }
-func (w *wrapFPR) Unwrap() http.ResponseWriter                     { return w.statusWriter }
+func (w *wrapFPR) ReadFrom(r io.Reader) (int64, error)              { return w.d.ReadFrom(r) }
+func (w *wrapFPR) Unwrap() http.ResponseWriter                      { return w.statusWriter }
 
 type wrapHPR struct {
 	*statusWriter
@@ -354,10 +354,10 @@ type wrapHPR struct {
 	d readerFromDelegator
 }
 
-func (w *wrapHPR) Hijack() (net.Conn, *bufio.ReadWriter, error)  { return w.h.Hijack() }
+func (w *wrapHPR) Hijack() (net.Conn, *bufio.ReadWriter, error)     { return w.h.Hijack() }
 func (w *wrapHPR) Push(target string, opts *http.PushOptions) error { return w.p.Push(target, opts) }
-func (w *wrapHPR) ReadFrom(r io.Reader) (int64, error)           { return w.d.ReadFrom(r) }
-func (w *wrapHPR) Unwrap() http.ResponseWriter                     { return w.statusWriter }
+func (w *wrapHPR) ReadFrom(r io.Reader) (int64, error)              { return w.d.ReadFrom(r) }
+func (w *wrapHPR) Unwrap() http.ResponseWriter                      { return w.statusWriter }
 
 type wrapFHPR struct {
 	*statusWriter
@@ -367,8 +367,8 @@ type wrapFHPR struct {
 	d readerFromDelegator
 }
 
-func (w *wrapFHPR) Flush()                                          { w.f.Flush(); markFlushed(w.statusWriter) }
-func (w *wrapFHPR) Hijack() (net.Conn, *bufio.ReadWriter, error)  { return w.h.Hijack() }
+func (w *wrapFHPR) Flush()                                           { w.f.Flush(); markFlushed(w.statusWriter) }
+func (w *wrapFHPR) Hijack() (net.Conn, *bufio.ReadWriter, error)     { return w.h.Hijack() }
 func (w *wrapFHPR) Push(target string, opts *http.PushOptions) error { return w.p.Push(target, opts) }
-func (w *wrapFHPR) ReadFrom(r io.Reader) (int64, error)           { return w.d.ReadFrom(r) }
-func (w *wrapFHPR) Unwrap() http.ResponseWriter                     { return w.statusWriter }
+func (w *wrapFHPR) ReadFrom(r io.Reader) (int64, error)              { return w.d.ReadFrom(r) }
+func (w *wrapFHPR) Unwrap() http.ResponseWriter                      { return w.statusWriter }
