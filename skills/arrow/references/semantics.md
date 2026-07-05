@@ -17,12 +17,12 @@
 | 调用 | 效果 |
 |------|------|
 | `c.Abort(code)` | 跳过后续 Pre 与 Handler；已注册 After **仍执行** |
-| `target.Abort*(c, msg)` | 写 JSON 后 Abort |
+| `target.Abort` / `AbortJSON` | 写响应后 Abort |
 
 ```go
 func auth(c *arrow.Context) {
     if !valid(c) {
-        _ = target.AbortUnauthorized(c, "unauthorized")
+        _ = target.AbortJSON(c, http.StatusUnauthorized, apiErr{Message: "unauthorized"})
         return
     }
 }
@@ -38,7 +38,7 @@ func auth(c *arrow.Context) {
 |--|------|-------|
 | After | LIFO | **FIFO** |
 | 结构 | 嵌套 `next.ServeHTTP` | 扁平 `[]HandlerFunc` |
-| stdlib 适配 | — | `arrow.Adapt(mw)` |
+| 洋葱中间件 | 可复用 `http.Handler` 包装 | **不支持**，须写 `HandlerFunc` |
 
 ## 中间件作用域
 
@@ -55,12 +55,11 @@ v2 := app.Group("/v2").Use(rateLimit)  // 链式 Use
 ## 标准库互操作
 
 ```go
-app.Use(arrow.Adapt(stdMiddleware))
-app.Use(arrow.Linear(preFn, postFn))
 app.HandleHTTP("/static/", http.FileServer(http.Dir("./public")))
 ```
 
-`HandleHTTP` / `HandleHTTPMethod` 走 Arrow 中间件管道；`Mux().Handle*` **不走**。
+`HandleHTTP` / `HandleHTTPMethod` 走 Arrow 中间件管道；`Mux().Handle*` **不走**。  
+第三方 `func(http.Handler) http.Handler` 中间件**不接入**——在 Arrow 里用 `HandlerFunc` + `c.After` 重写。
 
 ## 热路径（修改框架代码时）
 

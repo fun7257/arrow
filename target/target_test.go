@@ -2,7 +2,6 @@ package target_test
 
 import (
 	"encoding/json"
-	"errors"
 	"html/template"
 	"io"
 	"net/http"
@@ -81,46 +80,55 @@ func TestWriteJSONTypes(t *testing.T) {
 	})
 }
 
-func TestWriteJSONAsEnvelope(t *testing.T) {
+func TestOKAndCreated(t *testing.T) {
 	rec, _ := runHandler(t, http.MethodGet, "/", func(c *arrow.Context) {
-		type user struct {
-			ID   int    `json:"id"`
-			Name string `json:"name"`
-		}
-		err := target.WriteJSONAs(c, http.StatusOK, user{ID: 1, Name: "ada"}, func(u user) target.Envelope[user] {
-			return target.Envelope[user]{
-				Code:    0,
-				Message: "ok",
-				Data:    u,
-			}
-		})
-		if err != nil {
+		if err := target.OK(c, map[string]string{"ok": "yes"}); err != nil {
 			t.Fatal(err)
 		}
 	}, nil)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"ok":"yes"`) {
+		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+	}
 
-	type user struct {
-		ID   int    `json:"id"`
-		Name string `json:"name"`
-	}
-	var got target.Envelope[user]
-	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
-		t.Fatal(err)
-	}
-	if got.Code != 0 || got.Message != "ok" || got.Data.ID != 1 || got.Data.Name != "ada" {
-		t.Fatalf("envelope = %+v", got)
+	rec, _ = runHandler(t, http.MethodPost, "/", func(c *arrow.Context) {
+		if err := target.Created(c, map[string]int{"id": 1}); err != nil {
+			t.Fatal(err)
+		}
+	}, nil)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusCreated)
 	}
 }
 
-func TestOKAs(t *testing.T) {
-	rec, _ := runHandler(t, http.MethodGet, "/", func(c *arrow.Context) {
-		if err := target.OKAs(c, "raw", func(s string) target.Envelope[string] {
-			return target.Envelope[string]{Code: 0, Message: "ok", Data: s}
-		}); err != nil {
+func TestNoContent(t *testing.T) {
+	rec, _ := runHandler(t, http.MethodDelete, "/", func(c *arrow.Context) {
+		if err := target.NoContent(c); err != nil {
 			t.Fatal(err)
 		}
 	}, nil)
-	if !strings.Contains(rec.Body.String(), `"data":"raw"`) {
+	if rec.Code != http.StatusNoContent || rec.Body.Len() != 0 {
+		t.Fatalf("status=%d body=%q", rec.Code, rec.Body.String())
+	}
+}
+
+func TestWritePlainAndXML(t *testing.T) {
+	rec, _ := runHandler(t, http.MethodGet, "/", func(c *arrow.Context) {
+		_ = target.WritePlain(c, http.StatusOK, "plain\n")
+	}, nil)
+	if !strings.Contains(rec.Body.String(), "plain") {
+		t.Fatalf("body = %q", rec.Body.String())
+	}
+
+	rec, _ = runHandler(t, http.MethodGet, "/", func(c *arrow.Context) {
+		_ = target.WriteXML(c, http.StatusOK, struct {
+			XMLName struct{} `xml:"payload"`
+			Name    string   `xml:"name"`
+		}{Name: "arrow"})
+	}, nil)
+	if ct := rec.Header().Get("Content-Type"); ct != "application/xml; charset=utf-8" {
+		t.Fatalf("content-type = %q", ct)
+	}
+	if !strings.Contains(rec.Body.String(), "<payload>") {
 		t.Fatalf("body = %q", rec.Body.String())
 	}
 }
@@ -138,21 +146,6 @@ func TestWriteEncoded(t *testing.T) {
 	}, nil)
 	if !strings.Contains(rec.Body.String(), `"k":"v"`) {
 		t.Fatalf("body = %q", rec.Body.String())
-	}
-}
-
-func TestErrorShape(t *testing.T) {
-	rec, _ := runHandler(t, http.MethodGet, "/", func(c *arrow.Context) {
-		if err := target.WriteError(c, http.StatusBadRequest, "invalid"); err != nil {
-			t.Fatal(err)
-		}
-	}, nil)
-	var got target.Error
-	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
-		t.Fatal(err)
-	}
-	if got.Message != "invalid" {
-		t.Fatalf("error = %+v", got)
 	}
 }
 
@@ -184,33 +177,12 @@ func TestProblemShape(t *testing.T) {
 	}
 }
 
-func TestPageShape(t *testing.T) {
-	rec, _ := runHandler(t, http.MethodGet, "/", func(c *arrow.Context) {
-		page := target.Page[string]{
-			Items: []string{"a", "b"},
-			Total: 2,
-			Page:  1,
-			Size:  10,
-		}
-		if err := target.WritePage(c, http.StatusOK, page); err != nil {
-			t.Fatal(err)
-		}
-	}, nil)
-	var got target.Page[string]
-	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
-		t.Fatal(err)
-	}
-	if got.Total != 2 || len(got.Items) != 2 || got.Items[0] != "a" {
-		t.Fatalf("page = %+v", got)
-	}
-}
-
 func TestAbortPenetration(t *testing.T) {
 	handlerCalled := false
 
 	app := arrow.New()
 	app.Use(func(c *arrow.Context) {
-		_ = target.AbortUnauthorized(c, "unauthorized")
+		_ = target.AbortJSON(c, http.StatusUnauthorized, map[string]string{"message": "unauthorized"})
 	})
 	app.GET("/", func(c *arrow.Context) {
 		handlerCalled = true
@@ -221,17 +193,17 @@ func TestAbortPenetration(t *testing.T) {
 	app.Handler().ServeHTTP(rec, req)
 
 	if handlerCalled {
-		t.Fatal("handler should not run after AbortUnauthorized")
+		t.Fatal("handler should not run after AbortJSON")
 	}
 	if rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
 	}
-	var got target.Error
+	var got map[string]string
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
 		t.Fatal(err)
 	}
-	if got.Message != "unauthorized" {
-		t.Fatalf("error = %+v", got)
+	if got["message"] != "unauthorized" {
+		t.Fatalf("body = %+v", got)
 	}
 }
 
@@ -241,7 +213,7 @@ func TestAbortStillRunsAfter(t *testing.T) {
 	app := arrow.New()
 	app.Use(func(c *arrow.Context) {
 		c.After(func(c *arrow.Context) { order = append(order, "after") })
-		_ = target.AbortForbidden(c, "denied")
+		_ = target.AbortJSON(c, http.StatusForbidden, map[string]string{"message": "denied"})
 	})
 	app.GET("/", func(c *arrow.Context) { order = append(order, "handler") })
 
@@ -254,11 +226,11 @@ func TestAbortStillRunsAfter(t *testing.T) {
 	}
 }
 
-func TestAbortWithDelegatesToAbort(t *testing.T) {
+func TestAbortJSONDelegatesToAbort(t *testing.T) {
 	handlerCalled := false
 	app := arrow.New()
 	app.Use(func(c *arrow.Context) {
-		_ = target.AbortWith(c, target.JSON(http.StatusTeapot, target.Error{Message: "short"}))
+		_ = target.AbortJSON(c, http.StatusTeapot, map[string]string{"message": "short"})
 	})
 	app.GET("/", func(c *arrow.Context) { handlerCalled = true })
 
@@ -418,34 +390,6 @@ func TestWriteSSE(t *testing.T) {
 	}
 }
 
-func TestWriteNegotiated(t *testing.T) {
-	t.Run("json default", func(t *testing.T) {
-		rec, _ := runHandler(t, http.MethodGet, "/", func(c *arrow.Context) {
-			_ = target.WriteNegotiated(c, http.StatusOK, map[string]string{"fmt": "json"})
-		}, nil)
-		if ct := rec.Header().Get("Content-Type"); ct != "application/json; charset=utf-8" {
-			t.Fatalf("content-type = %q", ct)
-		}
-	})
-
-	t.Run("xml accept", func(t *testing.T) {
-		rec, _ := runHandler(t, http.MethodGet, "/", func(c *arrow.Context) {
-			_ = target.WriteNegotiated(c, http.StatusOK, struct {
-				XMLName struct{} `xml:"payload"`
-				Fmt     string   `xml:"fmt"`
-			}{Fmt: "xml"})
-		}, func(r *http.Request) {
-			r.Header.Set("Accept", "application/xml;q=1,text/html;q=0.9")
-		})
-		if ct := rec.Header().Get("Content-Type"); ct != "application/xml; charset=utf-8" {
-			t.Fatalf("content-type = %q", ct)
-		}
-		if !strings.Contains(rec.Body.String(), "<payload>") {
-			t.Fatalf("body = %q", rec.Body.String())
-		}
-	})
-}
-
 func TestEncodeErrorNoHeaders(t *testing.T) {
 	var written bool
 	rec, _ := runHandler(t, http.MethodGet, "/", func(c *arrow.Context) {
@@ -473,30 +417,6 @@ func TestBeforeWriteHook(t *testing.T) {
 	}, nil)
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusAccepted)
-	}
-}
-
-func TestWriteNegotiatedRegisteredEncoder(t *testing.T) {
-	const contentType = "application/x-custom"
-	target.RegisterEncoder(contentType, func(w io.Writer, v []byte) error {
-		_, err := w.Write(append([]byte("custom:"), v...))
-		return err
-	})
-	t.Cleanup(func() { target.RegisterEncoder(contentType, nil) })
-
-	rec, _ := runHandler(t, http.MethodGet, "/", func(c *arrow.Context) {
-		_ = target.WriteNegotiated(c, http.StatusOK, map[string]string{"k": "v"})
-	}, func(r *http.Request) {
-		r.Header.Set("Accept", contentType)
-	})
-	if ct := rec.Header().Get("Content-Type"); ct != contentType {
-		t.Fatalf("content-type = %q", ct)
-	}
-	if !strings.HasPrefix(rec.Body.String(), "custom:") {
-		t.Fatalf("body = %q, want custom encoder prefix", rec.Body.String())
-	}
-	if !strings.Contains(rec.Body.String(), `"k":"v"`) {
-		t.Fatalf("body = %q, want JSON payload inside custom encoder output", rec.Body.String())
 	}
 }
 
@@ -543,7 +463,7 @@ func TestAbortEarlyReturnWhenWritten(t *testing.T) {
 	app := arrow.New()
 	app.Use(func(c *arrow.Context) {
 		_ = target.WriteJSON(c, http.StatusOK, map[string]string{"first": "yes"})
-		_ = target.Abort(c, target.JSON(http.StatusTeapot, target.Error{Message: "ignored"}))
+		_ = target.Abort(c, target.JSON(http.StatusTeapot, map[string]string{"message": "ignored"}))
 		aborted = c.IsAborted()
 		status = c.Status()
 	})
@@ -625,25 +545,9 @@ func TestProblemExtraSkipsReservedKeys(t *testing.T) {
 	}
 }
 
-func TestWriteNegotiatedStarAccept(t *testing.T) {
+func TestWriteBytes(t *testing.T) {
 	rec, _ := runHandler(t, http.MethodGet, "/", func(c *arrow.Context) {
-		_ = target.WriteNegotiated(c, http.StatusOK, map[string]string{"fmt": "json"})
-	}, func(r *http.Request) {
-		r.Header.Set("Accept", "*/*")
-	})
-	if ct := rec.Header().Get("Content-Type"); ct != "application/json; charset=utf-8" {
-		t.Fatalf("content-type = %q", ct)
-	}
-}
-
-func TestRegisterEncoderNilClears(t *testing.T) {
-	const contentType = "application/x-clear-test"
-	target.RegisterEncoder(contentType, func(w io.Writer, v []byte) error {
-		return errors.New("should not run")
-	})
-	target.RegisterEncoder(contentType, nil)
-	rec, _ := runHandler(t, http.MethodGet, "/", func(c *arrow.Context) {
-		_ = target.WriteBytes(c, http.StatusOK, contentType, []byte("raw"))
+		_ = target.WriteBytes(c, http.StatusOK, "application/octet-stream", []byte("raw"))
 	}, nil)
 	if rec.Body.String() != "raw" {
 		t.Fatalf("body = %q", rec.Body.String())

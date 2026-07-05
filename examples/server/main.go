@@ -74,7 +74,7 @@ func requireToken(token string) arrow.HandlerFunc {
 	return func(c *arrow.Context) {
 		auth := c.Request.Header.Get("Authorization")
 		if auth != "Bearer "+token {
-			_ = target.AbortUnauthorized(c, "unauthorized")
+			_ = target.AbortJSON(c, http.StatusUnauthorized, apiErr{Message: "unauthorized"})
 		}
 	}
 }
@@ -82,6 +82,10 @@ func requireToken(token string) arrow.HandlerFunc {
 type post struct {
 	ID    string `json:"id"`
 	Title string `json:"title"`
+}
+
+type apiErr struct {
+	Message string `json:"message"`
 }
 
 var (
@@ -111,7 +115,7 @@ func showPost(c *arrow.Context) {
 		}
 	}
 	// Handler path: write 404 without aborting (penetration already complete).
-	target.NotFound(c, "post not found")
+	target.WriteJSON(c, http.StatusNotFound, apiErr{Message: "post not found"})
 }
 
 func createPost(c *arrow.Context) {
@@ -119,11 +123,11 @@ func createPost(c *arrow.Context) {
 		Title string `json:"title"`
 	}
 	if err := json.NewDecoder(c.Request.Body).Decode(&in); err != nil {
-		target.BadRequest(c, "invalid json")
+		target.WriteJSON(c, http.StatusBadRequest, apiErr{Message: "invalid json"})
 		return
 	}
 	if in.Title == "" {
-		target.BadRequest(c, "title is required")
+		target.WriteJSON(c, http.StatusBadRequest, apiErr{Message: "title is required"})
 		return
 	}
 

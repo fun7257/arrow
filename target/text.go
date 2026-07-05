@@ -50,5 +50,6 @@ func (b bytesTarget) Respond(c *arrow.Context) error {
 	if len(b.body) == 0 {
 		return nil
 	}
-	return encodeBytes(b.contentType, c.Writer, b.body)
+	_, err := c.Write(b.body)
+	return err
 }

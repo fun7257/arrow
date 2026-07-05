@@ -16,11 +16,6 @@ func WriteJSON[T any](c *arrow.Context, status int, body T) error {
 	return Write(c, JSON[T](status, body))
 }
 
-// WriteJSONAs transforms body before JSON encoding.
-func WriteJSONAs[T, E any](c *arrow.Context, status int, body T, transform func(T) E) error {
-	return WriteJSON(c, status, transform(body))
-}
-
 // WriteJSONIndent writes indented JSON.
 func WriteJSONIndent[T any](c *arrow.Context, status int, body T, prefix, indent string) error {
 	return Write(c, Encoded[T]{
@@ -33,11 +28,6 @@ func WriteJSONIndent[T any](c *arrow.Context, status int, body T, prefix, indent
 // OK writes 200 JSON.
 func OK[T any](c *arrow.Context, body T) error {
 	return WriteJSON(c, http.StatusOK, body)
-}
-
-// OKAs writes 200 JSON after transforming body.
-func OKAs[T, E any](c *arrow.Context, body T, transform func(T) E) error {
-	return WriteJSONAs(c, http.StatusOK, body, transform)
 }
 
 // Created writes 201 JSON.
@@ -53,4 +43,9 @@ func Accepted[T any](c *arrow.Context, body T) error {
 // NoContent writes 204 with no body.
 func NoContent(c *arrow.Context) error {
 	return WriteStatus(c, http.StatusNoContent)
+}
+
+// AbortJSON aborts penetration after writing a JSON body.
+func AbortJSON[T any](c *arrow.Context, status int, body T) error {
+	return Abort(c, JSON[T](status, body))
 }

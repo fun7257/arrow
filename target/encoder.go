@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"io"
-	"sync"
 )
 
 // Encoder serializes a typed body and reports its Content-Type.
@@ -86,38 +85,6 @@ type BytesEncoder struct {
 }
 
 func (e BytesEncoder) Encode(w io.Writer, v []byte) error {
-	_, err := w.Write(v)
-	return err
-}
-
-var (
-	bytesEncoderMu sync.RWMutex
-	bytesEncoders  = map[string]func(io.Writer, []byte) error{}
-)
-
-// RegisterEncoder registers a custom []byte encoder for contentType.
-// Content types registered here can be selected by WriteNegotiated when listed in Accept
-// or returned from Options.SelectFormat.
-//
-// In the WriteNegotiated registered-encoder path, the body is JSON-encoded first and
-// the resulting bytes are passed to fn. Encoders receive JSON bytes, not the original value.
-func RegisterEncoder(contentType string, fn func(w io.Writer, v []byte) error) {
-	bytesEncoderMu.Lock()
-	defer bytesEncoderMu.Unlock()
-	if fn == nil {
-		delete(bytesEncoders, contentType)
-		return
-	}
-	bytesEncoders[contentType] = fn
-}
-
-func encodeBytes(contentType string, w io.Writer, v []byte) error {
-	bytesEncoderMu.RLock()
-	fn, ok := bytesEncoders[contentType]
-	bytesEncoderMu.RUnlock()
-	if ok {
-		return fn(w, v)
-	}
 	_, err := w.Write(v)
 	return err
 }
