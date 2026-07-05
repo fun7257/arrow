@@ -62,7 +62,7 @@ func testCompileFails(t *testing.T, dir string) string {
 	target := filepath.Join(root, "testdata", "compile", dir)
 
 	var buf bytes.Buffer
-	cmd := exec.Command("go", "build", ".")
+	cmd := exec.Command("go", "build", "-buildvcs=false", ".")
 	cmd.Dir = target
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
