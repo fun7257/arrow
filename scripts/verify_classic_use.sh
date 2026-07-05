@@ -24,7 +24,7 @@ for required in TestCompileRejectsUseChaining TestCompileRejectsGroupUseAssignme
   grep -qF -- "--- PASS: ${required} " "$SCRATCH/test.log" || { log "FAIL: missing ${required}"; exit 1; }
 done
 for pkg in github.com/fun7257/arrow github.com/fun7257/arrow/target; do
-  grep -qF -- "ok  ${pkg}" "$SCRATCH/test.log" || { log "FAIL: missing ok ${pkg}"; exit 1; }
+  grep -Eq "^ok[[:space:]]+${pkg}([[:space:]]|$)" "$SCRATCH/test.log" || { log "FAIL: missing ok ${pkg}"; exit 1; }
 done
 log "=== step 4: compile fixtures ==="
 for dir in use_chain group_use_assign group_use_stmt; do
