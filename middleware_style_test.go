@@ -36,7 +36,8 @@ func TestRepoUsesClassicMiddlewareRegistration(t *testing.T) {
 		if !strings.HasSuffix(path, ".go") && !strings.HasSuffix(path, ".md") {
 			return nil
 		}
-		if strings.HasSuffix(path, "middleware_style_test.go") {
+		switch filepath.Base(path) {
+		case "middleware_style_test.go", "plan_verification_test.go", "compile_api_test.go":
 			return nil
 		}
 

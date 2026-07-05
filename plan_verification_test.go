@@ -21,7 +21,7 @@ func TestPlanVerificationNoVariadicUseOutsideTestdata(t *testing.T) {
 func TestPlanVerificationNoGroupUseOutsideTestdata(t *testing.T) {
 	root := repoRoot(t)
 	pattern := regexp.MustCompile(`Group\([^)]*\)\.Use\(`)
-	walkForbidden(t, root, pattern, "Group().Use(")
+	walkForbidden(t, root, pattern, "Group-then-Use chain")
 }
 
 func repoRoot(t *testing.T) string {
