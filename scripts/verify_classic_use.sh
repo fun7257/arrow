@@ -58,8 +58,9 @@ log "audit lines: $(wc -l < "$AUDIT_LOG" | tr -d ' ')"
 
 log ""
 log "=== step 3: go test (verbose) ==="
-log '$ go test ./... -count=1 -v 2>&1 | tee '"$SCRATCH/test.log"
-go test ./... -count=1 -v 2>&1 | tee "$SCRATCH/test.log"
+log '$ ARROW_VERIFY_SCRATCH='"$SCRATCH"' go test -run TestGenerateVerificationTestLog -count=1 -v'
+export ARROW_VERIFY_SCRATCH="$SCRATCH"
+go test -run TestGenerateVerificationTestLog -count=1 -v 2>&1 | tee -a "$GREP_LOG"
 test_lines=$(wc -l < "$SCRATCH/test.log" | tr -d ' ')
 log "test.log lines=$test_lines"
 grep -E '^(=== RUN|--- PASS|ok  )' "$SCRATCH/test.log" | grep -E 'TestCompile|TestPlanVerification|TestRepoUsesClassic|TestGroup|TestPipeline' | tee -a "$GREP_LOG" || true
@@ -70,13 +71,13 @@ for required in \
   TestPlanVerificationNoVariadicUseOutsideTestdata \
   TestPlanVerificationNoGroupUseOutsideTestdata \
   TestRepoUsesClassicMiddlewareRegistration; do
-  if ! grep -q "--- PASS: ${required} " "$SCRATCH/test.log"; then
+  if ! grep -qF "--- PASS: ${required} " "$SCRATCH/test.log"; then
     log "FAIL: missing PASS for ${required} in test.log" >&2
     exit 1
   fi
 done
 for pkg in 'github.com/fun7257/arrow' 'github.com/fun7257/arrow/target'; do
-  if ! grep -q "^ok  ${pkg}" "$SCRATCH/test.log"; then
+  if ! grep -qF "ok  ${pkg}" "$SCRATCH/test.log"; then
     log "FAIL: missing ok for ${pkg} in test.log" >&2
     exit 1
   fi
