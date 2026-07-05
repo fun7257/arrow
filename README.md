@@ -380,10 +380,7 @@ arrow/
 ├── writer_wrap.go     # ResponseWriter 可选接口委托
 ├── bench_*.go         # 微基准与夹具测试
 ├── testdata/bench/    # 基准夹具 JSON（见目录内 README）
-├── scripts/
-│   ├── run_perf.sh    # 微基准 + 中等压力（推荐入口）
-│   └── stress_test.sh # 中等压力（examples/server）
-├── examples/server/   # 标准示例服务（压力测试目标）
+├── examples/server/   # 标准示例服务
 ├── middleware/        # 内置中间件（Recover、RequestID、Logger）
 └── target/            # HTTP 响应写入（开发者自定 body；RFC 7807 Problem）
 ```
@@ -392,22 +389,7 @@ arrow/
 
 ## 性能测试
 
-两套互补测试，完整说明见 [`testdata/bench/README.md`](testdata/bench/README.md)。
-
-### 一键运行（推荐）
-
-```bash
-./scripts/run_perf.sh
-```
-
-依次执行微基准与中等压力测试。保存输出：
-
-```bash
-BENCH_COUNT=3 OUT_DIR=./perf-out ./scripts/run_perf.sh
-# 生成 perf-out/bench.log、perf-out/stress.log
-```
-
-### 微基准
+微基准说明见 [`testdata/bench/README.md`](testdata/bench/README.md)。
 
 Arrow 与 `net/http.ServeMux` 成对对比，计时路径经 `Router` → `Handler()` → `ServeHTTP`：
 
@@ -424,25 +406,6 @@ go test -bench=. -benchmem -count=1 -run='^$' ./...
 ```
 
 无全局中间件时，路由注册内联 `executeZeroMiddleware`（不经 `pipeline.Run` / `runNoMiddleware`）；有 `app.Use` 时走 `pipeline.Run`。由 `TestBenchHotPathUsesRouterZeroMiddlewareDispatch` 等测试保障。
-
-### 中等压力
-
-对 `examples/server` 持续压测（默认每端点 **30s**，`/health` 并发 **100**，API 并发 **50**）：
-
-```bash
-./scripts/stress_test.sh
-```
-
-| 环境变量 | 默认值 | 含义 |
-|----------|--------|------|
-| `DURATION` | `30s` | 每端点持续时间（hey） |
-| `HEALTH_C` | `100` | `/health` 并发 |
-| `API_C` | `50` | API 端点并发 |
-| `PORT` | `8080` | 服务端口 |
-| `START_SERVER` | `1` | 自动启动 `examples/server` |
-| `OUT` | — | 将结果写入文件 |
-
-优先使用 [hey](https://github.com/rakyll/hey)；未安装时回退到系统 `ab`。
 
 ---
 
