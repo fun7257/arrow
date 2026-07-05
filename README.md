@@ -8,35 +8,6 @@ go get github.com/fun7257/arrow
 
 **要求：** Go 1.22+（依赖 `http.ServeMux` 路由增强）
 
-**AI Agent Skill：** Grok 斜杠命令 `/arrow`（安装见下方 [AI Agent Skill](#ai-agent-skill)）
-
----
-
-## AI Agent Skill
-
-为 Grok 等 AI 助手提供的 Arrow 开发手册：[`skills/arrow/SKILL.md`](skills/arrow/SKILL.md)（含 `references/` 深度参考）。
-
-### 一键安装（无需克隆仓库）
-
-```bash
-# 全局（所有项目）→ ~/.grok/skills/arrow
-curl -fsSL https://raw.githubusercontent.com/fun7257/arrow/main/skills/install.sh | bash
-
-# 仅当前目录项目 → ./.grok/skills/arrow
-curl -fsSL https://raw.githubusercontent.com/fun7257/arrow/main/skills/install.sh | bash -s project
-```
-
-### 克隆仓库后安装
-
-```bash
-git clone https://github.com/fun7257/arrow.git
-cd arrow
-./skills/install.sh          # 项目级 → .grok/skills/arrow
-./skills/install.sh user     # 全局 → ~/.grok/skills/arrow
-```
-
-更多说明见 [`skills/README.md`](skills/README.md)。
-
 ---
 
 ## 核心理念：穿透线性模型
@@ -343,8 +314,6 @@ target.WriteXML(c, http.StatusOK, payload)
 
 已写入的响应不会重复写入（`c.Written()` 守卫）。
 
-完整 `target` API 表见 [`skills/arrow/references/api.md`](skills/arrow/references/api.md)。
-
 ---
 
 ## 内置中间件
@@ -398,7 +367,6 @@ Arrow **不替换** `net/http`，而是增强它：
 
 ```
 arrow/
-├── skills/arrow/      # AI Agent Skill 源文件（SKILL.md + references/）
 ├── arrow.go           # 应用入口、服务器启动
 ├── context.go         # Context、Abort、After
 ├── pipeline.go        # 线性穿透执行引擎（executeZeroMiddleware）
