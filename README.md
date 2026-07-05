@@ -135,12 +135,13 @@ admin := api.Group("/admin")      // 嵌套前缀 /api/admin
 api.GET("/posts", list)           // → GET /api/posts
 admin.GET("/", dashboard)         // → GET /api/admin/
 
-// Use 支持链式调用
-v2 := app.Group("/api/v2").Use(rateLimit)
+v2 := app.Group("/api/v2")
+v2.Use(rateLimit)
 v2.GET("/status", status)
 ```
 
-- `Group(prefix)` 返回子 `*Router`，**创建时**继承父级已注册的中间件（`pipe.clone()` 快照）
+- `Group(prefix)` 返回子路由作用域，**创建时**继承父级已注册的中间件（`pipe.clone()` 快照）
+- 组级中间件须先赋值再 `Use`：`api := app.Group("/api"); api.Use(auth)`（Group 与 Use 不能写在同一表达式）
 - 子组可继续 `Use()` 追加中间件；**之后**在父级新增的 `Use` 不会影响已创建的子组
 - 兄弟组中间件互不影响（见 `group_test.go`）
 
@@ -151,8 +152,11 @@ v2.GET("/status", status)
 ### 注册
 
 ```go
-app.Use(middleware.Recover(), middleware.Logger())  // 支持链式调用
+app.Use(middleware.Recover())
+app.Use(middleware.Logger())
 ```
+
+经典显式注册：每次 `Use` 只接受一个中间件，无返回值。不可 `app.Use(a).Use(b)` 链式串联；路由组须先 `api := app.Group(prefix)` 再 `api.Use(mw)`（`Group` 与 `Use` 不能写在同一表达式）。
 
 中间件作用于：**在当前 Router 上注册的路由**，以及 **在此之后** 用该 Router 作为父级创建的子组上的路由。
 
@@ -329,11 +333,9 @@ target.WriteXML(c, http.StatusOK, payload)
 ```go
 import "github.com/fun7257/arrow/middleware"
 
-app.Use(
-    middleware.Recover(),
-    middleware.RequestID(),
-    middleware.Logger(),
-)
+app.Use(middleware.Recover())
+app.Use(middleware.RequestID())
+app.Use(middleware.Logger())
 ```
 
 ---
