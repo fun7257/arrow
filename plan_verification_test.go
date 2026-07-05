@@ -14,8 +14,8 @@ import (
 
 func TestPlanVerificationNoVariadicUseOutsideTestdata(t *testing.T) {
 	root := repoRoot(t)
-	pattern := regexp.MustCompile(`Use\(middleware\.Recover\(\),`)
-	walkForbidden(t, root, pattern, "variadic Use(middleware.Recover(),")
+	pattern := regexp.MustCompile(`Use\(` + `middleware\.Recover\(\),`)
+	walkForbidden(t, root, pattern, "variadic multi-arg Recover Use")
 }
 
 func TestPlanVerificationNoGroupUseOutsideTestdata(t *testing.T) {

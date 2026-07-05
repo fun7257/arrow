@@ -62,7 +62,25 @@ log '$ go test ./... -count=1 -v 2>&1 | tee '"$SCRATCH/test.log"
 go test ./... -count=1 -v 2>&1 | tee "$SCRATCH/test.log"
 test_lines=$(wc -l < "$SCRATCH/test.log" | tr -d ' ')
 log "test.log lines=$test_lines"
-grep -E '^(=== RUN|--- PASS|ok  )' "$SCRATCH/test.log" | grep -E 'TestCompile|TestGroup|TestPipeline' | tee -a "$GREP_LOG" || true
+grep -E '^(=== RUN|--- PASS|ok  )' "$SCRATCH/test.log" | grep -E 'TestCompile|TestPlanVerification|TestRepoUsesClassic|TestGroup|TestPipeline' | tee -a "$GREP_LOG" || true
+for required in \
+  TestCompileRejectsUseChaining \
+  TestCompileRejectsGroupUseAssignment \
+  TestCompileRejectsGroupUseStatement \
+  TestPlanVerificationNoVariadicUseOutsideTestdata \
+  TestPlanVerificationNoGroupUseOutsideTestdata \
+  TestRepoUsesClassicMiddlewareRegistration; do
+  if ! grep -q "--- PASS: ${required} " "$SCRATCH/test.log"; then
+    log "FAIL: missing PASS for ${required} in test.log" >&2
+    exit 1
+  fi
+done
+for pkg in 'github.com/fun7257/arrow' 'github.com/fun7257/arrow/target'; do
+  if ! grep -q "^ok  ${pkg}" "$SCRATCH/test.log"; then
+    log "FAIL: missing ok for ${pkg} in test.log" >&2
+    exit 1
+  fi
+done
 
 log ""
 log "=== step 4: compile-fail fixtures (group_use_stmt must fail) ==="
