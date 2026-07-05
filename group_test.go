@@ -65,11 +65,12 @@ func TestGroupMiddlewareNotInheritedBySibling(t *testing.T) {
 	}
 }
 
-func TestGroupUseChaining(t *testing.T) {
+func TestGroupExplicitUseRegistration(t *testing.T) {
 	called := false
 
 	app := arrow.New()
-	api := app.Group("/api").Use(func(c *arrow.Context) {
+	api := app.Group("/api")
+	api.Use(func(c *arrow.Context) {
 		called = true
 	})
 	api.GET("/x", func(c *arrow.Context) {})
@@ -79,6 +80,6 @@ func TestGroupUseChaining(t *testing.T) {
 	app.Handler().ServeHTTP(rec, req)
 
 	if !called {
-		t.Fatal("chained Use middleware should run")
+		t.Fatal("group Use middleware should run")
 	}
 }
