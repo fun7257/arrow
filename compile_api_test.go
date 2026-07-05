@@ -34,6 +34,9 @@ func TestCompileRejectsGroupUseStatement(t *testing.T) {
 		"must reject non-addressable Group().Use statement",
 		"used as value",
 	)
+	if !strings.Contains(out, "groupRoutes") {
+		t.Fatalf("compile output = %q, want diagnostic mentioning groupRoutes", out)
+	}
 }
 
 func requireCompileDiagnostic(t *testing.T, out string, want string, forbidMsg string, forbid ...string) {
@@ -63,9 +66,10 @@ func testCompileFails(t *testing.T, dir string) string {
 	cmd.Dir = target
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
-	err := cmd.Run()
-	if err == nil {
+	if err := cmd.Run(); err == nil {
 		t.Fatalf("expected compile failure in %s", target)
+	} else if _, ok := err.(*exec.ExitError); !ok {
+		t.Fatalf("expected exit error from go build in %s, got %T: %v\noutput: %s", target, err, err, buf.String())
 	}
 	return buf.String()
 }
