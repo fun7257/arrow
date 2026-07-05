@@ -22,24 +22,25 @@ func (r *Router) muxPattern(method, pattern string) string {
 	return method + " " + fullPattern
 }
 
+func serveZero(w http.ResponseWriter, req *http.Request, run func(*Context)) {
+	ctx := newContext(w, req)
+	defer recoverAndRelease(ctx)
+	run(ctx)
+}
+
 func (r *Router) register(method, pattern string, handler HandlerFunc) {
 	muxPattern := r.muxPattern(method, pattern)
 	if len(r.pipe.middlewares) == 0 {
-		wrapped := func(w http.ResponseWriter, req *http.Request) {
-			zeroMiddlewareRouterDispatches.Add(1)
-			ctx := newContext(w, req)
-			defer recoverAndRelease(ctx)
-			executeZeroMiddleware(ctx, handler)
-		}
-		r.mux.HandleFunc(muxPattern, wrapped)
+		r.mux.HandleFunc(muxPattern, func(w http.ResponseWriter, req *http.Request) {
+			serveZero(w, req, func(ctx *Context) { executeZeroMiddleware(ctx, handler) })
+		})
 		return
 	}
 	pipe := r.pipe
-	wrapped := func(w http.ResponseWriter, req *http.Request) {
+	r.mux.HandleFunc(muxPattern, func(w http.ResponseWriter, req *http.Request) {
 		ctx := newContext(w, req)
 		pipe.Run(ctx, handler)
-	}
-	r.mux.HandleFunc(muxPattern, wrapped)
+	})
 }
 
 func (r *Router) registerHTTP(method, pattern string, h http.Handler) {
@@ -59,27 +60,18 @@ func (r *Router) registerHTTP(method, pattern string, h http.Handler) {
 		}
 	}
 
+	serve := func(c *Context) { handler.ServeHTTP(c.Writer, c.Request) }
 	if len(r.pipe.middlewares) == 0 {
-		h := handler
-		wrapped := func(w http.ResponseWriter, req *http.Request) {
-			zeroMiddlewareRouterDispatches.Add(1)
-			ctx := newContext(w, req)
-			defer recoverAndRelease(ctx)
-			executeZeroMiddleware(ctx, func(c *Context) {
-				h.ServeHTTP(c.Writer, c.Request)
-			})
-		}
-		r.mux.Handle(muxPattern, http.HandlerFunc(wrapped))
+		r.mux.Handle(muxPattern, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+			serveZero(w, req, func(ctx *Context) { executeZeroMiddleware(ctx, serve) })
+		}))
 		return
 	}
 	pipe := r.pipe
-	wrapped := func(w http.ResponseWriter, req *http.Request) {
+	r.mux.Handle(muxPattern, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		ctx := newContext(w, req)
-		pipe.Run(ctx, func(c *Context) {
-			handler.ServeHTTP(c.Writer, c.Request)
-		})
-	}
-	r.mux.Handle(muxPattern, http.HandlerFunc(wrapped))
+		pipe.Run(ctx, serve)
+	}))
 }
 
 // GET registers a GET route.

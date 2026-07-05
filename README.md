@@ -373,7 +373,6 @@ arrow/
 ├── context.go         # Context、Abort、After
 ├── pipeline.go        # 线性穿透执行引擎（executeZeroMiddleware）
 ├── router.go          # GET/POST/... 路由注册
-├── hotpath_dispatch.go # 零中间件分发计数器（测试钩子）
 ├── group.go           # 路由组（pipe.clone 继承中间件）
 ├── middleware.go      # Use 中间件注册
 

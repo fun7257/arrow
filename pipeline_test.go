@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/fun7257/arrow"
+	"github.com/fun7257/arrow/middleware"
 )
 
 func TestPipelineAfterForwardOrder(t *testing.T) {
@@ -107,7 +108,7 @@ func TestPipelineAbortStillRunsAfter(t *testing.T) {
 
 func TestPipelinePanicRecovery(t *testing.T) {
 	app := arrow.New()
-	app.Use(middlewareRecover())
+	app.Use(middleware.Recover())
 	app.GET("/", func(c *arrow.Context) {
 		panic("boom")
 	})
@@ -119,8 +120,4 @@ func TestPipelinePanicRecovery(t *testing.T) {
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusInternalServerError)
 	}
-}
-
-func middlewareRecover() arrow.HandlerFunc {
-	return func(c *arrow.Context) {}
 }

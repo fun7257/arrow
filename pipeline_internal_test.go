@@ -10,7 +10,7 @@ func TestRunNoMiddlewareAfterOrder(t *testing.T) {
 	var order []string
 
 	rec := httptest.NewRecorder()
-	ctx := newContext(rec, httptest.NewRequest("GET", "/", nil))
+	ctx := newContext(rec, httptest.NewRequest(http.MethodGet, "/", nil))
 
 	runNoMiddleware(ctx, func(c *Context) {
 		c.After(func(c *Context) { order = append(order, "after") })
@@ -28,7 +28,7 @@ func TestRunNoMiddlewareAfterOrder(t *testing.T) {
 	}
 }
 
-func TestServeZeroMiddlewareFromHTTPEquivalentToRunNoMiddleware(t *testing.T) {
+func TestZeroMiddlewareRouterMatchesRunNoMiddleware(t *testing.T) {
 	runCase := func(handler HandlerFunc, viaRouter bool) (code int, body string, handlerRan bool) {
 		rec := httptest.NewRecorder()
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
@@ -37,9 +37,10 @@ func TestServeZeroMiddlewareFromHTTPEquivalentToRunNoMiddleware(t *testing.T) {
 			ran = true
 			handler(c)
 		}
-		resetZeroMiddlewareDispatchCounters()
 		if viaRouter {
-			serveZeroMiddlewareFromHTTP(rec, req, wrapped)
+			app := New()
+			app.GET("/", wrapped)
+			app.Handler().ServeHTTP(rec, req)
 		} else {
 			ctx := newContext(rec, req)
 			runNoMiddleware(ctx, wrapped)
@@ -97,18 +98,5 @@ func TestExecuteZeroMiddlewareSkipsHandlerWhenPreAborted(t *testing.T) {
 
 	if handlerRan {
 		t.Fatal("executeZeroMiddleware must skip handler when already aborted")
-	}
-}
-
-func TestRunNoMiddlewareIncrementsPipelineCounter(t *testing.T) {
-	resetZeroMiddlewareDispatchCounters()
-	rec := httptest.NewRecorder()
-	ctx := newContext(rec, httptest.NewRequest(http.MethodGet, "/", nil))
-	runNoMiddleware(ctx, func(c *Context) {})
-	if zeroMiddlewarePipelineDispatches.Load() != 1 {
-		t.Fatalf("pipeline dispatches = %d, want 1", zeroMiddlewarePipelineDispatches.Load())
-	}
-	if zeroMiddlewareRouterDispatches.Load() != 0 {
-		t.Fatalf("router dispatches = %d, want 0", zeroMiddlewareRouterDispatches.Load())
 	}
 }
