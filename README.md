@@ -378,34 +378,10 @@ arrow/
 ├── middleware.go      # Use 中间件注册
 
 ├── writer_wrap.go     # ResponseWriter 可选接口委托
-├── bench_*.go         # 微基准与夹具测试
-├── testdata/bench/    # 基准夹具 JSON（见目录内 README）
 ├── examples/server/   # 标准示例服务
 ├── middleware/        # 内置中间件（Recover、RequestID、Logger）
 └── target/            # HTTP 响应写入（开发者自定 body；RFC 7807 Problem）
 ```
-
----
-
-## 性能测试
-
-微基准说明见 [`testdata/bench/README.md`](testdata/bench/README.md)。
-
-Arrow 与 `net/http.ServeMux` 成对对比，计时路径经 `Router` → `Handler()` → `ServeHTTP`：
-
-| 场景 | 说明 |
-|------|------|
-| minimal | 单路由最小响应 |
-| static | 多路由静态表 |
-| parametric | `{param}` 路径参数 |
-| middleware | 静态表 + 5 层 noop 中间件 |
-| large | 120 路由大型表 |
-
-```bash
-go test -bench=. -benchmem -count=1 -run='^$' ./...
-```
-
-无全局中间件时，路由注册内联 `executeZeroMiddleware`（不经 `pipeline.Run` / `runNoMiddleware`）；有 `app.Use` 时走 `pipeline.Run`。由 `TestBenchHotPathUsesRouterZeroMiddlewareDispatch` 等测试保障。
 
 ---
 

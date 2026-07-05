@@ -10,15 +10,13 @@ import (
 	"testing"
 )
 
-// These tests mirror plan.md verification step 2 grep commands with --exclude-dir=testdata.
-
-func TestPlanVerificationNoVariadicUseOutsideTestdata(t *testing.T) {
+func TestPlanVerificationNoVariadicUse(t *testing.T) {
 	root := repoRoot(t)
 	pattern := regexp.MustCompile(`Use\(` + `middleware\.Recover\(\),`)
 	walkForbidden(t, root, pattern, "variadic multi-arg Recover Use")
 }
 
-func TestPlanVerificationNoGroupUseOutsideTestdata(t *testing.T) {
+func TestPlanVerificationNoGroupUseChaining(t *testing.T) {
 	root := repoRoot(t)
 	pattern := regexp.MustCompile(`Group\([^)]*\)\.Use\(`)
 	walkForbidden(t, root, pattern, "Group-then-Use chain")
@@ -41,7 +39,7 @@ func walkForbidden(t *testing.T, root string, pattern *regexp.Regexp, label stri
 			return err
 		}
 		if d.IsDir() {
-			if d.Name() == ".git" || d.Name() == "testdata" {
+			if d.Name() == ".git" {
 				return filepath.SkipDir
 			}
 			return nil
@@ -66,6 +64,6 @@ func walkForbidden(t *testing.T, root string, pattern *regexp.Regexp, label stri
 		t.Fatal(err)
 	}
 	if len(violations) > 0 {
-		t.Fatalf("plan grep would match %s outside testdata:\n%s", label, strings.Join(violations, "\n"))
+		t.Fatalf("plan grep would match %s:\n%s", label, strings.Join(violations, "\n"))
 	}
 }

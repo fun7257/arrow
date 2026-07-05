@@ -28,7 +28,7 @@ func TestRepoUsesClassicMiddlewareRegistration(t *testing.T) {
 			return err
 		}
 		if d.IsDir() {
-			if d.Name() == ".git" || d.Name() == "testdata" {
+			if d.Name() == ".git" {
 				return filepath.SkipDir
 			}
 			return nil
@@ -37,7 +37,7 @@ func TestRepoUsesClassicMiddlewareRegistration(t *testing.T) {
 			return nil
 		}
 		switch filepath.Base(path) {
-		case "middleware_style_test.go", "plan_verification_test.go", "compile_api_test.go":
+		case "middleware_style_test.go", "plan_verification_test.go":
 			return nil
 		}
 
